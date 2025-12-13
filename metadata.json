@@ -1,0 +1,5 @@
+{
+  "name": "YouTube Bot Defend",
+  "description": "A specialized tool to detect and remove online gambling (judol) spam from YouTube Live Chat using advanced pattern recognition.",
+  "requestFramePermissions": []
+}
