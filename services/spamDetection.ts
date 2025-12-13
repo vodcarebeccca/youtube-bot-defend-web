@@ -248,6 +248,17 @@ function detectJudolLinkPattern(text: string): { isJudol: boolean; name: string 
   return { isJudol: false, name: '' };
 }
 
+// ==================== VULGAR/TOXIC WORDS ====================
+const VULGAR_WORDS = [
+  'ngentot', 'ng3ntot', 'ngent0t', 'ngentt0t',
+  'memek', 'm3m3k', 'mem3k', 'mmek', 'mek',
+  'kontol', 'k0nt0l', 'kont0l', 'k0ntol', 'kontl', 'ktl',
+  'pepek', 'p3p3k', 'pep3k',
+  'jembut', 'j3mbut',
+  'titit', 't1t1t',
+  'toket', 't0k3t',
+];
+
 // ==================== MAIN DETECTION ====================
 export function detectJudol(text: string, customSpamWords: string[] = []): SpamResult {
   const originalLower = text.toLowerCase();
@@ -257,7 +268,25 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
   let score = 0;
   const keywordsFound: string[] = [];
   
-  // Check custom spam words first (user-defined)
+  // Check vulgar/toxic words first (highest priority)
+  for (const word of VULGAR_WORDS) {
+    const wordNorm = word.toLowerCase().replace(/\s/g, '');
+    if (normalized.includes(wordNorm) || normalizedLeet.includes(wordNorm) || originalLower.includes(word)) {
+      keywordsFound.push(`toxic:${word}`);
+      score += 100; // Vulgar words = instant spam
+    }
+  }
+  
+  // If vulgar word found, return immediately
+  if (keywordsFound.length > 0 && keywordsFound.some(k => k.startsWith('toxic:'))) {
+    return {
+      isSpam: true,
+      score: 100,
+      keywords: keywordsFound.slice(0, 5)
+    };
+  }
+  
+  // Check custom spam words (user-defined)
   if (customSpamWords.length > 0) {
     for (const word of customSpamWords) {
       const wordNorm = word.toLowerCase().replace(/\s/g, '');
