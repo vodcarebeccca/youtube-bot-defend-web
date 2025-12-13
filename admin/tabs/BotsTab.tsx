@@ -2,7 +2,7 @@
  * Bots Tab - Manage bot tokens for web app
  */
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCw, Bot, X, Eye, EyeOff, Power, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Bot, X, Eye, EyeOff, Power, AlertTriangle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 // Firebase Config
 const FIREBASE_CONFIG = {
@@ -22,6 +22,40 @@ interface BotToken {
   refresh_token: string;
   enabled: boolean;
   created_at: string;
+  token_status?: 'valid' | 'invalid' | 'checking' | 'unknown';
+  last_checked?: string;
+}
+
+// Google OAuth credentials (same as botService.ts)
+const GOOGLE_CLIENT_ID = '573738457758-tjgqgd4dhd0oqtor24b6ciu1vfvv2rdl.apps.googleusercontent.com';
+const GOOGLE_CLIENT_SECRET = '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';
+
+// Test token validity by trying to refresh
+async function testTokenValidity(refreshToken: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      }),
+    });
+    
+    if (response.ok) {
+      return { valid: true };
+    } else {
+      const errorData = await response.json();
+      return { 
+        valid: false, 
+        error: errorData.error_description || errorData.error || 'Token invalid' 
+      };
+    }
+  } catch (e) {
+    return { valid: false, error: (e as Error).message };
+  }
 }
 
 // Helper functions
@@ -55,10 +89,32 @@ const BotsTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({});
+  const [tokenStatus, setTokenStatus] = useState<Record<string, 'valid' | 'invalid' | 'checking' | 'unknown'>>({});
 
   useEffect(() => {
     loadBots();
   }, []);
+
+  // Test single bot token
+  const testBotToken = async (bot: BotToken) => {
+    if (!bot._id || !bot.refresh_token) return;
+    
+    setTokenStatus(prev => ({ ...prev, [bot._id!]: 'checking' }));
+    
+    const result = await testTokenValidity(bot.refresh_token);
+    setTokenStatus(prev => ({ ...prev, [bot._id!]: result.valid ? 'valid' : 'invalid' }));
+    
+    if (!result.valid) {
+      console.log(`[BotsTab] Token invalid for ${bot.name}: ${result.error}`);
+    }
+  };
+
+  // Test all bot tokens
+  const testAllTokens = async () => {
+    for (const bot of bots) {
+      await testBotToken(bot);
+    }
+  };
 
   const loadBots = async () => {
     setLoading(true);
@@ -119,6 +175,13 @@ const BotsTab: React.FC = () => {
             className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
           >
             <RefreshCw size={16} /> Refresh
+          </button>
+          <button
+            onClick={testAllTokens}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm"
+            title="Test semua token"
+          >
+            <CheckCircle size={16} /> Test All
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -189,6 +252,29 @@ const BotsTab: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Token Status Indicator */}
+                  {tokenStatus[bot._id!] === 'checking' && (
+                    <div className="p-2" title="Sedang mengecek...">
+                      <Loader2 size={18} className="text-blue-400 animate-spin" />
+                    </div>
+                  )}
+                  {tokenStatus[bot._id!] === 'valid' && (
+                    <div className="p-2" title="Token Valid ✓">
+                      <CheckCircle size={18} className="text-emerald-400" />
+                    </div>
+                  )}
+                  {tokenStatus[bot._id!] === 'invalid' && (
+                    <div className="p-2" title="Token Invalid / Expired">
+                      <XCircle size={18} className="text-red-400" />
+                    </div>
+                  )}
+                  <button
+                    onClick={() => testBotToken(bot)}
+                    className="p-2 text-blue-400 hover:bg-blue-900/30 rounded"
+                    title="Test Token"
+                  >
+                    <RefreshCw size={18} />
+                  </button>
                   <button
                     onClick={() => toggleShowToken(bot._id!)}
                     className="p-2 text-gray-400 hover:text-white rounded"
@@ -216,6 +302,35 @@ const BotsTab: React.FC = () => {
               {/* Token Details */}
               {showTokens[bot._id!] && (
                 <div className="mt-4 p-3 bg-gray-900 rounded-lg">
+                  {/* Token Status Banner */}
+                  {tokenStatus[bot._id!] && (
+                    <div className={`flex items-center gap-2 p-2 rounded mb-3 ${
+                      tokenStatus[bot._id!] === 'valid' 
+                        ? 'bg-emerald-900/20 border border-emerald-900/50' 
+                        : tokenStatus[bot._id!] === 'invalid'
+                          ? 'bg-red-900/20 border border-red-900/50'
+                          : 'bg-blue-900/20 border border-blue-900/50'
+                    }`}>
+                      {tokenStatus[bot._id!] === 'checking' && (
+                        <>
+                          <Loader2 size={14} className="text-blue-400 animate-spin" />
+                          <span className="text-xs text-blue-300">Mengecek token...</span>
+                        </>
+                      )}
+                      {tokenStatus[bot._id!] === 'valid' && (
+                        <>
+                          <CheckCircle size={14} className="text-emerald-400" />
+                          <span className="text-xs text-emerald-300">✓ Token Valid - Refresh token berfungsi dengan baik</span>
+                        </>
+                      )}
+                      {tokenStatus[bot._id!] === 'invalid' && (
+                        <>
+                          <XCircle size={14} className="text-red-400" />
+                          <span className="text-xs text-red-300">✗ Token Invalid - Perlu login ulang via Python tools</span>
+                        </>
+                      )}
+                    </div>
+                  )}
                   <p className="text-xs text-gray-500 mb-1">Access Token:</p>
                   <code className="text-xs text-gray-300 break-all block mb-2">
                     {bot.access_token?.slice(0, 50)}...
