@@ -2,7 +2,7 @@
  * Bots Tab - Manage bot tokens for web app
  */
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, RefreshCw, Bot, Check, X, Eye, EyeOff, Power, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Bot, X, Eye, EyeOff, Power, AlertTriangle } from 'lucide-react';
 
 // Firebase Config
 const FIREBASE_CONFIG = {
@@ -259,13 +259,22 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
     try {
       const data = JSON.parse(json);
       
+      // Extract channel info (support multiple formats)
+      const channelInfo = data.channel_info || {};
+      const channelTitle = channelInfo.snippet?.title || channelInfo.title || data.name || 'Bot';
+      const channelId = channelInfo.id || data.channel_id || '';
+      const channelUrl = channelInfo.snippet?.customUrl 
+        ? `https://youtube.com/${channelInfo.snippet.customUrl}` 
+        : channelInfo.url || '';
+      const avatarUrl = channelInfo.snippet?.thumbnails?.default?.url || channelInfo.avatar || '';
+      
       // Format 1: Direct token format
       if (data.access_token && data.refresh_token) {
         return {
-          name: data.channel_info?.title || data.name || 'Bot',
-          channel_id: data.channel_info?.id || data.channel_id || '',
-          channel_url: data.channel_info?.url || '',
-          avatar_url: data.channel_info?.avatar || '',
+          name: channelTitle,
+          channel_id: channelId,
+          channel_url: channelUrl,
+          avatar_url: avatarUrl,
           access_token: data.access_token,
           refresh_token: data.refresh_token,
         };
@@ -274,17 +283,18 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
       // Format 2: Nested tokens format (from Python tools)
       if (data.tokens?.access_token) {
         return {
-          name: data.channel_info?.title || data.name || 'Bot',
-          channel_id: data.channel_info?.id || data.channel_id || '',
-          channel_url: data.channel_info?.url || '',
-          avatar_url: data.channel_info?.avatar || '',
+          name: channelTitle,
+          channel_id: channelId,
+          channel_url: channelUrl,
+          avatar_url: avatarUrl,
           access_token: data.tokens.access_token,
           refresh_token: data.tokens.refresh_token,
         };
       }
       
       return null;
-    } catch {
+    } catch (e) {
+      console.error('Parse JSON error:', e);
       return null;
     }
   };

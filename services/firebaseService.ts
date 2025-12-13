@@ -145,11 +145,15 @@ export async function getCloudBots(): Promise<CloudBotToken[]> {
 
 /**
  * Parse token data from cloud bot
+ * Supports multiple formats:
+ * - Direct: { access_token, refresh_token }
+ * - Python tools: { tokens: { access_token, refresh_token }, channel_info: { id, snippet: { title } } }
  */
 export function parseTokenData(tokenDataStr: string): {
   access_token: string;
   refresh_token: string;
   channel_id: string;
+  channel_name?: string;
 } | null {
   try {
     const data = JSON.parse(tokenDataStr);
@@ -157,6 +161,7 @@ export function parseTokenData(tokenDataStr: string): {
       access_token: data.tokens?.access_token || data.access_token || '',
       refresh_token: data.tokens?.refresh_token || data.refresh_token || '',
       channel_id: data.channel_info?.id || data.channel_id || '',
+      channel_name: data.channel_info?.snippet?.title || data.channel_info?.title || data.name || '',
     };
   } catch {
     return null;

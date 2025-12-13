@@ -50,7 +50,10 @@ export function initializeBots(): BotToken[] {
 /**
  * Initialize bots from Firebase cloud
  * Falls back to local constants if Firebase fails
- * Supports both old format (token_data JSON string) and new format (direct access_token/refresh_token)
+ * Supports multiple formats:
+ * 1. Old format: token_data JSON string
+ * 2. New format: direct access_token/refresh_token fields
+ * 3. Python tools format: nested tokens.access_token and channel_info.snippet.title
  */
 export async function initializeBotsFromFirebase(): Promise<BotToken[]> {
   console.log('[BotService] Loading bots from Firebase...');
@@ -66,6 +69,9 @@ export async function initializeBotsFromFirebase(): Promise<BotToken[]> {
         let accessToken = '';
         let refreshToken = '';
         let channelId = cloudBot.channel_id || '';
+        let botName = cloudBot.name || '';
+        
+        const botAny = cloudBot as any;
         
         // Format 1: Old format with token_data JSON string
         if (cloudBot.has_token && cloudBot.token_data) {
@@ -77,27 +83,37 @@ export async function initializeBotsFromFirebase(): Promise<BotToken[]> {
           }
         }
         
-        // Format 2: New format with direct access_token/refresh_token fields
-        // Check if bot has direct token fields (from admin panel web)
-        const botAny = cloudBot as any;
+        // Format 2: New format with direct access_token/refresh_token fields (from admin panel web)
         if (!refreshToken && botAny.access_token && botAny.refresh_token) {
           accessToken = botAny.access_token;
           refreshToken = botAny.refresh_token;
           console.log(`[BotService] Found direct token format for ${cloudBot.name}`);
         }
         
+        // Format 3: Python tools format with nested tokens object
+        if (!refreshToken && botAny.tokens?.access_token && botAny.tokens?.refresh_token) {
+          accessToken = botAny.tokens.access_token;
+          refreshToken = botAny.tokens.refresh_token;
+          // Get channel info from nested structure
+          if (botAny.channel_info) {
+            channelId = botAny.channel_info.id || channelId;
+            botName = botAny.channel_info.snippet?.title || botAny.channel_info.title || botName;
+          }
+          console.log(`[BotService] Found Python tools nested format for ${botName}`);
+        }
+        
         // Add bot if we have valid refresh token
         if (refreshToken) {
           firebaseBots.push({
             id: parseInt(cloudBot.id) || firebaseBots.length + 1,
-            name: cloudBot.name || `Bot ${cloudBot.id}`,
+            name: botName || `Bot ${cloudBot.id}`,
             accessToken: accessToken,
             refreshToken: refreshToken,
             channelId: channelId,
             expiresAt: 0, // Force refresh
             source: 'firebase',
           });
-          console.log(`[BotService] ✅ Added bot: ${cloudBot.name}`);
+          console.log(`[BotService] ✅ Added bot: ${botName || cloudBot.name}`);
         } else {
           console.log(`[BotService] ⚠️ Skipped bot ${cloudBot.name} - no valid token`);
         }
