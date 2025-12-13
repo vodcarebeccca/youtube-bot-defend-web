@@ -63,3 +63,11 @@ export interface AppSettings {
   aiDetectionEnabled: boolean;  // 6. AI Detection Toggle
   customSpamWords: string[];    // 7. Custom Spam Words
 }
+
+// Moderator Status
+export interface ModeratorStatus {
+  isModerator: boolean;
+  isOwner: boolean;
+  botName: string;
+  error?: string;
+}

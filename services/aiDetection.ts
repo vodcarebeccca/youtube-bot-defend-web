@@ -41,23 +41,38 @@ const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // AI Provider type
 export type AIProvider = 'gemini' | 'groq' | 'auto';
 
-// System prompt for spam detection
+// System prompt for spam detection - IMPROVED VERSION
 const SPAM_DETECTION_PROMPT = `Kamu adalah AI detector spam judol (judi online) di live chat YouTube Indonesia.
+Kamu HARUS sangat hati-hati untuk TIDAK salah mendeteksi chat normal sebagai spam.
 
-Analisis pesan berikut dan tentukan apakah ini SPAM JUDOL atau bukan.
+## SPAM JUDOL (confidence 80-100):
+- Promosi LANGSUNG slot, togel, casino, poker online
+- Menyebut nama situs judi (zeus88, garuda777, pragmatic, dll)
+- Ajakan daftar/deposit/main judi dengan link/kontak
+- Kombinasi: bonus + maxwin + gacor + scatter + jackpot + link/WA
+- Link WA/Telegram + ajakan main judi
+- Menggunakan huruf unicode untuk bypass filter + promosi judi
 
-Ciri-ciri spam judol:
-- Promosi slot, togel, casino, poker online
-- Menyebut nama situs judi (zeus88, garuda777, dll)
-- Ajakan daftar/deposit/main judi
-- Menyebut bonus, maxwin, gacor, scatter, jackpot
-- Link atau kontak (WA, Telegram, "cek bio")
-- Menggunakan huruf unicode/fancy untuk bypass filter
+## BUKAN SPAM (confidence 0-30):
+- Chat gaming biasa: "100 rbx", "jual robux", "private server", "akun roblox"
+- Jual beli item game: "jual diamond", "jual akun ML", "trade item"
+- Viewer melaporkan judol: "ada judol", "ban judol", "spam judol"
+- Komentar normal: sapaan, pertanyaan, reaksi stream
+- Menyebut angka/harga tanpa konteks judi: "100k", "50rb", "harga berapa"
+- Promosi channel/konten YouTube sendiri
+- Jual jasa editing, design, dll (bukan judi)
 
-BUKAN spam jika:
-- Viewer biasa yang melaporkan ada judol ("ada judol nih", "ban judol")
-- Komentar normal tentang konten stream
-- Pertanyaan atau sapaan biasa
+## KONTEKS PENTING:
+- "rbx" / "robux" = mata uang game Roblox, BUKAN judi
+- "private server" dalam konteks game = server game, BUKAN judi
+- "diamond" / "dm" = mata uang game Mobile Legends/Free Fire
+- "akun" tanpa konteks judi = akun game biasa
+- Angka + "rb"/"k" saja BUKAN indikator judi
+
+## ATURAN KETAT:
+1. Jika TIDAK ADA link/kontak WA/Telegram DAN tidak ada kata judi eksplisit → BUKAN SPAM
+2. Jika konteksnya GAMING (roblox, ml, ff, valorant, dll) → BUKAN SPAM
+3. Jika ragu, pilih BUKAN SPAM (false positive lebih buruk dari false negative)
 
 Jawab HANYA dengan format JSON:
 {"isSpam": true/false, "confidence": 0-100, "reason": "alasan singkat"}`;
