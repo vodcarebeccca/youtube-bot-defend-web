@@ -1,11 +1,38 @@
 /**
  * AI Detection Service - Uses Gemini or Groq AI for smarter spam detection
+ * Supports multiple API keys with rotation (comma-separated in env vars)
  * Only called when pattern matching doesn't detect spam but AI is enabled
  */
 
-// Get API keys from environment
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
+// Parse multiple API keys from environment (comma-separated)
+const GEMINI_API_KEYS: string[] = (import.meta.env.VITE_GEMINI_API_KEY || '')
+  .split(',')
+  .map((k: string) => k.trim())
+  .filter((k: string) => k.length > 0);
+
+const GROQ_API_KEYS: string[] = (import.meta.env.VITE_GROQ_API_KEY || '')
+  .split(',')
+  .map((k: string) => k.trim())
+  .filter((k: string) => k.length > 0);
+
+// Key rotation indexes
+let geminiKeyIndex = 0;
+let groqKeyIndex = 0;
+
+// Get next API key with rotation
+function getNextGeminiKey(): string | null {
+  if (GEMINI_API_KEYS.length === 0) return null;
+  const key = GEMINI_API_KEYS[geminiKeyIndex];
+  geminiKeyIndex = (geminiKeyIndex + 1) % GEMINI_API_KEYS.length;
+  return key;
+}
+
+function getNextGroqKey(): string | null {
+  if (GROQ_API_KEYS.length === 0) return null;
+  const key = GROQ_API_KEYS[groqKeyIndex];
+  groqKeyIndex = (groqKeyIndex + 1) % GROQ_API_KEYS.length;
+  return key;
+}
 
 // API endpoints
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
@@ -46,38 +73,55 @@ interface AIDetectionResult {
  * Check if AI detection is available (any API key configured)
  */
 export function isAIDetectionAvailable(): boolean {
-  return GEMINI_API_KEY.length > 0 || GROQ_API_KEY.length > 0;
+  return GEMINI_API_KEYS.length > 0 || GROQ_API_KEYS.length > 0;
 }
 
 /**
  * Get available AI provider
  */
 export function getAvailableProvider(): AIProvider | null {
-  if (GROQ_API_KEY.length > 0) return 'groq'; // Prefer Groq (faster)
-  if (GEMINI_API_KEY.length > 0) return 'gemini';
+  if (GROQ_API_KEYS.length > 0) return 'groq'; // Prefer Groq (faster)
+  if (GEMINI_API_KEYS.length > 0) return 'gemini';
   return null;
 }
 
 /**
- * Get provider display name
+ * Get provider display name with key count
  */
 export function getProviderName(): string {
-  const provider = getAvailableProvider();
-  if (provider === 'groq') return 'Groq (Llama)';
-  if (provider === 'gemini') return 'Gemini';
+  const groqCount = GROQ_API_KEYS.length;
+  const geminiCount = GEMINI_API_KEYS.length;
+  
+  if (groqCount > 0 && geminiCount > 0) {
+    return `Groq (${groqCount} keys) + Gemini (${geminiCount} keys)`;
+  }
+  if (groqCount > 0) return `Groq (${groqCount} key${groqCount > 1 ? 's' : ''})`;
+  if (geminiCount > 0) return `Gemini (${geminiCount} key${geminiCount > 1 ? 's' : ''})`;
   return 'None';
+}
+
+/**
+ * Get total key count
+ */
+export function getTotalKeyCount(): number {
+  return GROQ_API_KEYS.length + GEMINI_API_KEYS.length;
 }
 
 /**
  * Detect spam using Groq API (Llama model - very fast!)
  */
 async function detectWithGroq(message: string): Promise<AIDetectionResult> {
+  const apiKey = getNextGroqKey();
+  if (!apiKey) {
+    return { isSpam: false, confidence: 0, reason: 'No Groq API key', error: 'No key available' };
+  }
+  
   try {
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'llama-3.1-8b-instant',
@@ -126,8 +170,13 @@ async function detectWithGroq(message: string): Promise<AIDetectionResult> {
  * Detect spam using Gemini API
  */
 async function detectWithGemini(message: string): Promise<AIDetectionResult> {
+  const apiKey = getNextGeminiKey();
+  if (!apiKey) {
+    return { isSpam: false, confidence: 0, reason: 'No Gemini API key', error: 'No key available' };
+  }
+  
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
