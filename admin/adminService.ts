@@ -35,8 +35,14 @@ function firestoreToDict(doc: any): Record<string, any> {
     else if ('booleanValue' in value) result[key] = value.booleanValue;
     else if ('doubleValue' in value) result[key] = value.doubleValue;
     else if ('timestampValue' in value) result[key] = value.timestampValue;
-    else if ('arrayValue' in value) {
-      result[key] = (value.arrayValue.values || []).map((v: any) => Object.values(v)[0]);
+    else if ('mapValue' in value) {
+      // Handle nested objects (like features)
+      result[key] = firestoreToDict(value.mapValue);
+    } else if ('arrayValue' in value) {
+      result[key] = (value.arrayValue.values || []).map((v: any) => {
+        if ('mapValue' in v) return firestoreToDict(v.mapValue);
+        return Object.values(v)[0];
+      });
     }
   }
 
@@ -49,9 +55,13 @@ function dictToFirestore(data: Record<string, any>): Record<string, any> {
 
   for (const [key, value] of Object.entries(data)) {
     if (key.startsWith('_')) continue;
-    if (typeof value === 'string') fields[key] = { stringValue: value };
-    else if (typeof value === 'boolean') fields[key] = { booleanValue: value };
-    else if (typeof value === 'number') {
+    if (value === null || value === undefined) continue;
+    
+    if (typeof value === 'string') {
+      fields[key] = { stringValue: value };
+    } else if (typeof value === 'boolean') {
+      fields[key] = { booleanValue: value };
+    } else if (typeof value === 'number') {
       fields[key] = Number.isInteger(value) ? { integerValue: String(value) } : { doubleValue: value };
     } else if (Array.isArray(value)) {
       fields[key] = {
@@ -61,6 +71,9 @@ function dictToFirestore(data: Record<string, any>): Record<string, any> {
           ),
         },
       };
+    } else if (typeof value === 'object') {
+      // Handle nested objects (like features)
+      fields[key] = { mapValue: { fields: dictToFirestore(value) } };
     }
   }
   return fields;
