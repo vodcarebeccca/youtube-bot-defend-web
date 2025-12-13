@@ -26,9 +26,9 @@ interface BotToken {
   last_checked?: string;
 }
 
-// Google OAuth credentials (same as botService.ts)
+// Google OAuth credentials (MUST match Python tools google_oauth_config.json)
 const GOOGLE_CLIENT_ID = '573738457758-tjgqgd4dhd0oqtor24b6ciu1vfvv2rdl.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = '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';
+const GOOGLE_CLIENT_SECRET = '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';
 
 // Test token validity by trying to refresh
 async function testTokenValidity(refreshToken: string): Promise<{ valid: boolean; error?: string }> {
