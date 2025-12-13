@@ -80,19 +80,19 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
             onClick={() => setFilter(FilterType.ALL)}
             className={`px-3 py-1 rounded text-sm ${filter === FilterType.ALL ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
           >
-            All
+            Semua
           </button>
           <button 
             onClick={() => setFilter(FilterType.SPAM_ONLY)}
             className={`px-3 py-1 rounded text-sm ${filter === FilterType.SPAM_ONLY ? 'bg-red-900/50 text-red-200 border border-red-900' : 'text-gray-400 hover:text-white'}`}
           >
-            Pending
+            Menunggu
           </button>
           <button 
             onClick={() => setFilter(FilterType.CLEAN_ONLY)}
             className={`px-3 py-1 rounded text-sm ${filter === FilterType.CLEAN_ONLY ? 'bg-emerald-900/50 text-emerald-200 border border-emerald-900' : 'text-gray-400 hover:text-white'}`}
           >
-            Actioned
+            Ditindak
           </button>
         </div>
       </div>
@@ -141,7 +141,7 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
                 </span>
                 {getTypeBadge(entry)}
                 {entry.actionTaken && (
-                  <span title="Action taken">
+                  <span title="Sudah ditindak">
                     <CheckCircle size={14} className="text-emerald-500" />
                   </span>
                 )}

@@ -308,7 +308,7 @@ const App: React.FC = () => {
 
     } catch (err: any) {
       console.error("Polling error", err);
-      setErrorMsg(err.message || "Error polling messages");
+      setErrorMsg(err.message || "Gagal mengambil pesan");
       stopMonitoring();
     }
   }, [liveChatId, nextPageToken, settings, stats.spamDetected]);
@@ -491,7 +491,7 @@ const App: React.FC = () => {
                     ? 'OWNER' 
                     : modStatus.isModerator 
                       ? 'MODERATOR' 
-                      : 'NOT MOD'}
+                      : 'BUKAN MOD'}
                 </span>
               </div>
             )}
