@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
 import { X, Download, Shield, Zap, UserPlus, UserMinus, Brain, MessageSquare } from 'lucide-react';
+import { isAIDetectionAvailable, getProviderName } from '../services/aiDetection';
 
 interface SettingsPanelProps {
   settings: AppSettings;
@@ -137,7 +138,11 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, on
                   <Brain size={20} className="text-purple-500" />
                   <div>
                     <span className="text-white font-medium">AI Detection</span>
-                    <p className="text-xs text-gray-500">Use Gemini AI for smarter detection</p>
+                    <p className="text-xs text-gray-500">
+                      {isAIDetectionAvailable() 
+                        ? `Using ${getProviderName()} for smarter detection`
+                        : 'No AI provider configured'}
+                    </p>
                   </div>
                 </div>
                 <input
@@ -145,13 +150,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, on
                   checked={settings.aiDetectionEnabled || false}
                   onChange={(e) => setSettings(s => ({ ...s, aiDetectionEnabled: e.target.checked }))}
                   className="w-5 h-5 accent-purple-500"
+                  disabled={!isAIDetectionAvailable()}
                 />
               </label>
-              {settings.aiDetectionEnabled && (
+              {settings.aiDetectionEnabled && isAIDetectionAvailable() && (
                 <div className="p-2 bg-purple-900/20 border border-purple-900/50 rounded-lg">
                   <p className="text-xs text-purple-300">
-                    🤖 AI akan menganalisis pesan yang tidak terdeteksi oleh pattern matching.
-                    API key Gemini dikonfigurasi via environment variable.
+                    🤖 AI ({getProviderName()}) akan menganalisis pesan yang tidak terdeteksi oleh pattern matching.
+                  </p>
+                </div>
+              )}
+              {!isAIDetectionAvailable() && (
+                <div className="p-2 bg-gray-800 border border-gray-700 rounded-lg">
+                  <p className="text-xs text-gray-400">
+                    ⚠️ Set VITE_GEMINI_API_KEY atau VITE_GROQ_API_KEY di Vercel untuk mengaktifkan AI detection.
                   </p>
                 </div>
               )}

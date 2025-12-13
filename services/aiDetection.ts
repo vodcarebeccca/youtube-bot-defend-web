@@ -1,13 +1,18 @@
 /**
- * AI Detection Service - Uses Gemini AI for smarter spam detection
+ * AI Detection Service - Uses Gemini or Groq AI for smarter spam detection
  * Only called when pattern matching doesn't detect spam but AI is enabled
  */
 
-// Get Gemini API key from environment
+// Get API keys from environment
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || '';
 
-// Gemini API endpoint
+// API endpoints
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+
+// AI Provider type
+export type AIProvider = 'gemini' | 'groq' | 'auto';
 
 // System prompt for spam detection
 const SPAM_DETECTION_PROMPT = `Kamu adalah AI detector spam judol (judi online) di live chat YouTube Indonesia.
@@ -38,27 +43,89 @@ interface AIDetectionResult {
 }
 
 /**
- * Check if AI detection is available (API key configured)
+ * Check if AI detection is available (any API key configured)
  */
 export function isAIDetectionAvailable(): boolean {
-  return GEMINI_API_KEY.length > 0;
+  return GEMINI_API_KEY.length > 0 || GROQ_API_KEY.length > 0;
 }
 
 /**
- * Detect spam using Gemini AI
- * @param message - Chat message to analyze
- * @returns AI detection result
+ * Get available AI provider
  */
-export async function detectSpamWithAI(message: string): Promise<AIDetectionResult> {
-  if (!GEMINI_API_KEY) {
-    return {
-      isSpam: false,
-      confidence: 0,
-      reason: 'API key not configured',
-      error: 'GEMINI_API_KEY not set'
-    };
-  }
+export function getAvailableProvider(): AIProvider | null {
+  if (GROQ_API_KEY.length > 0) return 'groq'; // Prefer Groq (faster)
+  if (GEMINI_API_KEY.length > 0) return 'gemini';
+  return null;
+}
 
+/**
+ * Get provider display name
+ */
+export function getProviderName(): string {
+  const provider = getAvailableProvider();
+  if (provider === 'groq') return 'Groq (Llama)';
+  if (provider === 'gemini') return 'Gemini';
+  return 'None';
+}
+
+/**
+ * Detect spam using Groq API (Llama model - very fast!)
+ */
+async function detectWithGroq(message: string): Promise<AIDetectionResult> {
+  try {
+    const response = await fetch(GROQ_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          { role: 'system', content: SPAM_DETECTION_PROMPT },
+          { role: 'user', content: `Pesan untuk dianalisis:\n"${message}"` }
+        ],
+        temperature: 0.1,
+        max_tokens: 100,
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[AIDetection/Groq] API error:', errorData);
+      return {
+        isSpam: false,
+        confidence: 0,
+        reason: 'Groq API error',
+        error: errorData.error?.message || `HTTP ${response.status}`
+      };
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content || '';
+    
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const result = JSON.parse(jsonMatch[0]);
+      return {
+        isSpam: result.isSpam === true,
+        confidence: Math.min(100, Math.max(0, result.confidence || 0)),
+        reason: `Groq: ${result.reason || 'AI detection'}`
+      };
+    }
+
+    return { isSpam: false, confidence: 0, reason: 'Could not parse Groq response', error: 'Invalid format' };
+  } catch (error: any) {
+    console.error('[AIDetection/Groq] Error:', error);
+    return { isSpam: false, confidence: 0, reason: 'Groq detection failed', error: error.message };
+  }
+}
+
+/**
+ * Detect spam using Gemini API
+ */
+async function detectWithGemini(message: string): Promise<AIDetectionResult> {
   try {
     const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -80,11 +147,11 @@ export async function detectSpamWithAI(message: string): Promise<AIDetectionResu
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      console.error('[AIDetection] API error:', errorData);
+      console.error('[AIDetection/Gemini] API error:', errorData);
       return {
         isSpam: false,
         confidence: 0,
-        reason: 'API error',
+        reason: 'Gemini API error',
         error: errorData.error?.message || `HTTP ${response.status}`
       };
     }
@@ -92,32 +159,46 @@ export async function detectSpamWithAI(message: string): Promise<AIDetectionResu
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
     
-    // Parse JSON response from AI
+    // Parse JSON response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0]);
       return {
         isSpam: result.isSpam === true,
         confidence: Math.min(100, Math.max(0, result.confidence || 0)),
-        reason: result.reason || 'AI detection'
+        reason: `Gemini: ${result.reason || 'AI detection'}`
       };
     }
 
-    return {
-      isSpam: false,
-      confidence: 0,
-      reason: 'Could not parse AI response',
-      error: 'Invalid response format'
-    };
-
+    return { isSpam: false, confidence: 0, reason: 'Could not parse Gemini response', error: 'Invalid format' };
   } catch (error: any) {
-    console.error('[AIDetection] Error:', error);
+    console.error('[AIDetection/Gemini] Error:', error);
+    return { isSpam: false, confidence: 0, reason: 'Gemini detection failed', error: error.message };
+  }
+}
+
+/**
+ * Detect spam using available AI provider (auto-select)
+ * @param message - Chat message to analyze
+ * @returns AI detection result
+ */
+export async function detectSpamWithAI(message: string): Promise<AIDetectionResult> {
+  const provider = getAvailableProvider();
+  
+  if (!provider) {
     return {
       isSpam: false,
       confidence: 0,
-      reason: 'Detection failed',
-      error: error.message
+      reason: 'No API key configured',
+      error: 'Set VITE_GEMINI_API_KEY or VITE_GROQ_API_KEY'
     };
+  }
+
+  // Use Groq if available (faster), fallback to Gemini
+  if (provider === 'groq') {
+    return detectWithGroq(message);
+  } else {
+    return detectWithGemini(message);
   }
 }
 
