@@ -68,6 +68,8 @@ const App: React.FC = () => {
     spamThreshold: 50,
     whitelist: [],
     blacklist: [],
+    aiDetectionEnabled: false,
+    customSpamWords: [],
   });
   
   // Data State - Now focused on moderation log only
@@ -138,6 +140,8 @@ const App: React.FC = () => {
           ...parsed,
           whitelist: parsed.whitelist || [],
           blacklist: parsed.blacklist || [],
+          customSpamWords: parsed.customSpamWords || [],
+          aiDetectionEnabled: parsed.aiDetectionEnabled || false,
         })); 
       } catch {}
     }
@@ -175,7 +179,7 @@ const App: React.FC = () => {
         if (blacklist.length > 0 && blacklist.some(b => b && msg.username.toLowerCase().includes(b.toLowerCase()))) {
           return { ...msg, isSpam: true, spamScore: 100, spamKeywords: ['blacklisted'] };
         }
-        const spamCheck = detectJudol(msg.message);
+        const spamCheck = detectJudol(msg.message, settings.customSpamWords || []);
         return {
           ...msg,
           isSpam: spamCheck.score >= settings.spamThreshold,

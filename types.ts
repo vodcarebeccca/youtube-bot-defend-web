@@ -59,4 +59,7 @@ export interface AppSettings {
   spamThreshold: number;
   whitelist: string[];
   blacklist: string[];
+  // New features
+  aiDetectionEnabled: boolean;  // 6. AI Detection Toggle
+  customSpamWords: string[];    // 7. Custom Spam Words
 }

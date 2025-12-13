@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppSettings } from '../types';
-import { X, Download, Trash2, Shield, Bell, Zap, UserPlus, UserMinus } from 'lucide-react';
+import { X, Download, Shield, Zap, UserPlus, UserMinus, Brain, MessageSquare } from 'lucide-react';
 
 interface SettingsPanelProps {
   settings: AppSettings;
@@ -12,6 +12,7 @@ interface SettingsPanelProps {
 const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, onClose, onExportLog }) => {
   const [newWhitelist, setNewWhitelist] = useState('');
   const [newBlacklist, setNewBlacklist] = useState('');
+  const [newSpamWord, setNewSpamWord] = useState('');
 
   const addToWhitelist = () => {
     if (newWhitelist.trim()) {
@@ -33,6 +34,20 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, on
 
   const removeFromBlacklist = (item: string) => {
     setSettings(s => ({ ...s, blacklist: s.blacklist.filter(b => b !== item) }));
+  };
+
+  const addSpamWord = () => {
+    if (newSpamWord.trim()) {
+      const words = settings.customSpamWords || [];
+      if (!words.includes(newSpamWord.trim().toLowerCase())) {
+        setSettings(s => ({ ...s, customSpamWords: [...words, newSpamWord.trim().toLowerCase()] }));
+      }
+      setNewSpamWord('');
+    }
+  };
+
+  const removeSpamWord = (word: string) => {
+    setSettings(s => ({ ...s, customSpamWords: (s.customSpamWords || []).filter(w => w !== word) }));
   };
 
   return (
@@ -97,20 +112,80 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, on
             <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
               <Shield size={16} /> Detection
             </h3>
+            <div className="space-y-3">
+              {/* Spam Threshold */}
+              <div className="p-3 bg-[#0f0f0f] rounded-lg border border-gray-800">
+                <label className="text-white font-medium">Spam Threshold: {settings.spamThreshold}</label>
+                <p className="text-xs text-gray-500 mb-2">Lower = more sensitive (default: 50)</p>
+                <input
+                  type="range"
+                  min="20"
+                  max="90"
+                  value={settings.spamThreshold}
+                  onChange={(e) => setSettings(s => ({ ...s, spamThreshold: parseInt(e.target.value) }))}
+                  className="w-full accent-emerald-500"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>Sensitive (20)</span>
+                  <span>Strict (90)</span>
+                </div>
+              </div>
+
+              {/* AI Detection Toggle */}
+              <label className="flex items-center justify-between p-3 bg-[#0f0f0f] rounded-lg border border-gray-800">
+                <div className="flex items-center gap-3">
+                  <Brain size={20} className="text-purple-500" />
+                  <div>
+                    <span className="text-white font-medium">AI Detection</span>
+                    <p className="text-xs text-gray-500">Use Gemini AI for smarter detection</p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={settings.aiDetectionEnabled || false}
+                  onChange={(e) => setSettings(s => ({ ...s, aiDetectionEnabled: e.target.checked }))}
+                  className="w-5 h-5 accent-purple-500"
+                />
+              </label>
+              {settings.aiDetectionEnabled && (
+                <div className="p-2 bg-purple-900/20 border border-purple-900/50 rounded-lg">
+                  <p className="text-xs text-purple-300">
+                    🤖 AI akan menganalisis pesan yang tidak terdeteksi oleh pattern matching.
+                    Membutuhkan API key Gemini di admin panel.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Custom Spam Words */}
+          <div>
+            <h3 className="text-sm font-bold text-gray-400 uppercase mb-3 flex items-center gap-2">
+              <MessageSquare size={16} /> Custom Spam Words
+            </h3>
             <div className="p-3 bg-[#0f0f0f] rounded-lg border border-gray-800">
-              <label className="text-white font-medium">Spam Threshold: {settings.spamThreshold}</label>
-              <p className="text-xs text-gray-500 mb-2">Lower = more sensitive (default: 50)</p>
-              <input
-                type="range"
-                min="20"
-                max="90"
-                value={settings.spamThreshold}
-                onChange={(e) => setSettings(s => ({ ...s, spamThreshold: parseInt(e.target.value) }))}
-                className="w-full accent-emerald-500"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>Sensitive (20)</span>
-                <span>Strict (90)</span>
+              <p className="text-xs text-gray-500 mb-2">Add your own spam keywords (saved locally)</p>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  value={newSpamWord}
+                  onChange={(e) => setNewSpamWord(e.target.value)}
+                  placeholder="e.g. judol, slot, gacor..."
+                  className="flex-1 bg-[#1a1a1a] border border-gray-700 rounded px-3 py-2 text-sm text-white"
+                  onKeyDown={(e) => e.key === 'Enter' && addSpamWord()}
+                />
+                <button onClick={addSpamWord} className="px-3 py-2 bg-orange-600 text-white rounded text-sm">Add</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(settings.customSpamWords || []).map(word => (
+                  <span key={word} className="flex items-center gap-1 bg-orange-900/30 text-orange-300 px-2 py-1 rounded text-xs">
+                    {word}
+                    <button onClick={() => removeSpamWord(word)} className="hover:text-white"><X size={12} /></button>
+                  </span>
+                ))}
+                {(!settings.customSpamWords || settings.customSpamWords.length === 0) && (
+                  <span className="text-xs text-gray-500">No custom words added</span>
+                )}
               </div>
             </div>
           </div>
