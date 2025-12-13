@@ -147,7 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       <div className="px-3 py-4 border-t" style={{ borderColor: colors.border }}>
         {/* Support Button */}
         <a
-          href="https://trakteer.id"
+          href="https://trakteer.id/ziver_rfl"
           target="_blank"
           rel="noopener noreferrer"
           className={`
