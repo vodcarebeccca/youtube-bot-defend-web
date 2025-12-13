@@ -305,21 +305,9 @@ const StatCard: React.FC<{ title: string; value: number; icon: React.ReactNode; 
 import PatternsTabComponent from './tabs/PatternsTab';
 import BroadcastsTabComponent from './tabs/BroadcastsTab';
 import SettingsTabComponent from './tabs/SettingsTab';
+import BotsTabComponent from './tabs/BotsTab';
 
-// Placeholder tabs - basic implementation
-const BotsTab: React.FC = () => (
-  <div>
-    <h2 className="text-2xl font-bold mb-6">Bot Tokens</h2>
-    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <p className="text-gray-400 mb-4">
-        Bot tokens untuk web app dikelola melalui Firebase collection <code className="bg-gray-700 px-2 py-1 rounded">webapp_bots</code>.
-      </p>
-      <p className="text-sm text-gray-500">
-        Untuk menambah bot, sync dari Admin Panel Python Tools atau tambahkan langsung ke Firebase.
-      </p>
-    </div>
-  </div>
-);
+const BotsTab: React.FC = () => <BotsTabComponent />;
 
 const PatternsTab: React.FC = () => <PatternsTabComponent />;
 
