@@ -22,14 +22,19 @@ const SettingsTab: React.FC = () => {
     setLoading(false);
   };
 
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleSave = async () => {
     if (!config) return;
     setSaving(true);
+    setSaveError(null);
     const success = await updateRemoteConfig(config);
     setSaving(false);
     if (success) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
+    } else {
+      setSaveError('Gagal menyimpan! Cek Firebase security rules atau koneksi internet.');
     }
   };
 
@@ -67,14 +72,26 @@ const SettingsTab: React.FC = () => {
             className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
               saved 
                 ? 'bg-emerald-600 text-white' 
-                : 'bg-blue-600 hover:bg-blue-700 text-white'
+                : saveError
+                  ? 'bg-red-600 text-white'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
             }`}
           >
             <Save size={18} />
-            {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
+            {saving ? 'Saving...' : saved ? 'Saved!' : saveError ? 'Failed!' : 'Save Changes'}
           </button>
         </div>
       </div>
+
+      {/* Error Message */}
+      {saveError && (
+        <div className="bg-red-900/20 border border-red-900/50 rounded-xl p-4 mb-6">
+          <p className="text-red-400 text-sm">{saveError}</p>
+          <p className="text-red-400/70 text-xs mt-1">
+            Pastikan Firebase security rules mengizinkan write untuk collection webapp_config
+          </p>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* App Status */}

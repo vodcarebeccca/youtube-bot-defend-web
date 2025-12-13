@@ -484,6 +484,16 @@ export async function updateRemoteConfig(config: Partial<RemoteConfig>): Promise
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fields: dictToFirestore(config as Record<string, any>) }),
     });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('[AdminService] Update config failed:', response.status, errorData);
+      // Check if it's a permission error
+      if (response.status === 403 || response.status === 401) {
+        console.error('[AdminService] Permission denied - check Firebase security rules');
+      }
+    }
+    
     return response.ok;
   } catch (e) {
     console.error('[AdminService] Update config error:', e);
