@@ -126,10 +126,19 @@ const App: React.FC = () => {
     
     initApp();
     
-    // Load settings from localStorage
+    // Load settings from localStorage with defaults
     const savedSettings = localStorage.getItem('botDefendSettings');
     if (savedSettings) {
-      try { setSettings(JSON.parse(savedSettings)); } catch {}
+      try { 
+        const parsed = JSON.parse(savedSettings);
+        // Merge with defaults to ensure all fields exist
+        setSettings(prev => ({
+          ...prev,
+          ...parsed,
+          whitelist: parsed.whitelist || [],
+          blacklist: parsed.blacklist || [],
+        })); 
+      } catch {}
     }
   }, []);
 
@@ -154,12 +163,15 @@ const App: React.FC = () => {
 
       // Process Messages (Spam Detection)
       const processedMessages = newMessages.map(msg => {
-        // Check whitelist
-        if (settings.whitelist.some(w => msg.username.toLowerCase().includes(w.toLowerCase()))) {
+        // Check whitelist (with null safety)
+        const whitelist = settings.whitelist || [];
+        const blacklist = settings.blacklist || [];
+        
+        if (whitelist.length > 0 && whitelist.some(w => w && msg.username.toLowerCase().includes(w.toLowerCase()))) {
           return { ...msg, isSpam: false, spamScore: 0, spamKeywords: [] };
         }
-        // Check blacklist
-        if (settings.blacklist.some(b => msg.username.toLowerCase().includes(b.toLowerCase()))) {
+        // Check blacklist (with null safety)
+        if (blacklist.length > 0 && blacklist.some(b => b && msg.username.toLowerCase().includes(b.toLowerCase()))) {
           return { ...msg, isSpam: true, spamScore: 100, spamKeywords: ['blacklisted'] };
         }
         const spamCheck = detectJudol(msg.message);
