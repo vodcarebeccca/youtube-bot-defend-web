@@ -31,6 +31,7 @@ import { detectJudol } from './services/spamDetection';
 import { detectSpamWithAI, isAIDetectionAvailable } from './services/aiDetection';
 import { ChatMessage, DashboardStats, FilterType, AppSettings, ModerationEntry } from './types';
 import { Play, Square, Wifi, WifiOff, Settings, Volume2, VolumeX, Bot, Shield, ShieldCheck, ShieldAlert, Crown, ExternalLink } from 'lucide-react';
+import BotManager from './components/BotManager';
 
 // Sound notification
 const playNotificationSound = () => {
@@ -617,6 +618,9 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Bot Manager - Show available bots for users to add as moderator */}
+        {!isMonitoring && <BotManager isCollapsible={true} defaultExpanded={false} />}
         
         {/* Success Banner - Moderator Confirmed */}
         {modStatus && modStatus.isModerator && isMonitoring && (

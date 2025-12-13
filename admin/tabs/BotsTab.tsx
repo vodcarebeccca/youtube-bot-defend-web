@@ -177,7 +177,14 @@ const BotsTab: React.FC = () => {
                         <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded">NONAKTIF</span>
                       )}
                     </h3>
-                    <p className="text-sm text-gray-400">Channel ID: {bot.channel_id || '-'}</p>
+                    {bot.channel_url ? (
+                      <a href={bot.channel_url} target="_blank" rel="noopener noreferrer" 
+                         className="text-sm text-blue-400 hover:text-blue-300 hover:underline">
+                        🔗 {bot.channel_url}
+                      </a>
+                    ) : (
+                      <p className="text-sm text-gray-400">Channel ID: {bot.channel_id || '-'}</p>
+                    )}
                     <p className="text-xs text-gray-500">Ditambahkan: {new Date(bot.created_at).toLocaleDateString('id-ID')}</p>
                   </div>
                 </div>
@@ -250,6 +257,7 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
   const [jsonInput, setJsonInput] = useState('');
   const [name, setName] = useState('');
   const [channelId, setChannelId] = useState('');
+  const [channelUrl, setChannelUrl] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [refreshToken, setRefreshToken] = useState('');
   const [loading, setLoading] = useState(false);
@@ -322,6 +330,7 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
       botData = {
         name: name || 'Bot',
         channel_id: channelId,
+        channel_url: channelUrl,
         access_token: accessToken,
         refresh_token: refreshToken,
       };
@@ -422,6 +431,19 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
                   placeholder="UC..."
                   className="w-full bg-gray-900 border border-gray-600 rounded-lg p-2 text-white"
                 />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">URL Channel YouTube *</label>
+                <input
+                  type="text"
+                  value={channelUrl}
+                  onChange={(e) => setChannelUrl(e.target.value)}
+                  placeholder="https://youtube.com/@username atau https://youtube.com/channel/UC..."
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg p-2 text-white text-sm"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  URL ini akan ditampilkan di web app agar user bisa add bot sebagai moderator
+                </p>
               </div>
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Access Token *</label>
