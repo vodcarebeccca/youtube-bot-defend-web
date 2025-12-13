@@ -22,6 +22,7 @@ import {
     getJudolPatterns
 } from './services/firebaseService';
 import { detectJudol } from './services/spamDetection';
+import { detectSpamWithAI, isAIDetectionAvailable } from './services/aiDetection';
 import { ChatMessage, DashboardStats, FilterType, AppSettings, ModerationEntry } from './types';
 import { Play, Square, Wifi, WifiOff, Settings, Volume2, VolumeX, Bot, Shield, ShieldCheck, ShieldAlert, Crown, ExternalLink } from 'lucide-react';
 
@@ -187,6 +188,30 @@ const App: React.FC = () => {
           spamKeywords: spamCheck.keywords
         };
       });
+
+      // AI Detection for messages not caught by pattern matching
+      if (settings.aiDetectionEnabled && isAIDetectionAvailable()) {
+        const nonSpamMessages = processedMessages.filter(m => !m.isSpam);
+        // Only check first 3 messages per poll to avoid rate limiting
+        const toCheck = nonSpamMessages.slice(0, 3);
+        
+        for (const msg of toCheck) {
+          try {
+            const aiResult = await detectSpamWithAI(msg.message);
+            if (aiResult.isSpam && aiResult.confidence >= 70) {
+              // Update message as spam
+              const idx = processedMessages.findIndex(m => m.id === msg.id);
+              if (idx !== -1) {
+                processedMessages[idx].isSpam = true;
+                processedMessages[idx].spamScore = aiResult.confidence;
+                processedMessages[idx].spamKeywords = [`AI:${aiResult.reason}`];
+              }
+            }
+          } catch (e) {
+            console.error('[AI Detection] Error:', e);
+          }
+        }
+      }
 
       // Auto-actions for spam (only if bot is moderator)
       const spamMessages = processedMessages.filter(m => m.isSpam);

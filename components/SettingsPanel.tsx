@@ -151,7 +151,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ settings, setSettings, on
                 <div className="p-2 bg-purple-900/20 border border-purple-900/50 rounded-lg">
                   <p className="text-xs text-purple-300">
                     🤖 AI akan menganalisis pesan yang tidak terdeteksi oleh pattern matching.
-                    Membutuhkan API key Gemini di admin panel.
+                    API key Gemini dikonfigurasi via environment variable.
                   </p>
                 </div>
               )}
