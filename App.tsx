@@ -331,7 +331,7 @@ const App: React.FC = () => {
     setModStatus(null);
     const videoId = extractVideoId(videoUrl);
     if (!videoId) {
-      setErrorMsg("Invalid YouTube URL");
+      setErrorMsg("URL YouTube tidak valid");
       return;
     }
     try {
@@ -346,7 +346,7 @@ const App: React.FC = () => {
       
       // Warn if auto-actions enabled but not confirmed as moderator
       if ((settings.autoDelete || settings.autoBan || settings.autoTimeout) && !status.isModerator) {
-        setErrorMsg("⚠️ Bot mungkin bukan moderator - auto-actions mungkin gagal");
+        setErrorMsg("⚠️ Bot mungkin bukan moderator - aksi otomatis mungkin gagal");
       }
       
       setIsMonitoring(true);
@@ -412,7 +412,7 @@ const App: React.FC = () => {
           setModStatus(prev => prev ? { ...prev, isModerator: false, error: 'Bot bukan moderator di channel ini' } : prev);
         }
       }
-      alert(`Action failed: ${err.message}`);
+      alert(`Aksi gagal: ${err.message}`);
     }
   };
 
@@ -462,7 +462,7 @@ const App: React.FC = () => {
             {modCheckLoading && (
               <div className="flex items-center gap-2 bg-yellow-900/20 px-3 py-1.5 rounded-lg border border-yellow-900/50">
                 <div className="animate-spin h-4 w-4 border-2 border-yellow-400 border-t-transparent rounded-full" />
-                <span className="text-sm text-yellow-300">Checking mod...</span>
+                <span className="text-sm text-yellow-300">Cek status mod...</span>
               </div>
             )}
             {modStatus && !modCheckLoading && (
@@ -521,7 +521,7 @@ const App: React.FC = () => {
             <button
               onClick={() => setSettings(s => ({ ...s, soundEnabled: !s.soundEnabled }))}
               className={`p-2 rounded ${settings.soundEnabled ? 'text-emerald-400' : 'text-gray-500'}`}
-              title={settings.soundEnabled ? 'Sound ON' : 'Sound OFF'}
+              title={settings.soundEnabled ? 'Suara AKTIF' : 'Suara MATI'}
             >
               {settings.soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
             </button>
@@ -552,7 +552,7 @@ const App: React.FC = () => {
         {isLoading && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-6 mb-6 flex items-center justify-center gap-3">
             <div className="animate-spin h-5 w-5 border-2 border-emerald-400 border-t-transparent rounded-full" />
-            <span className="text-gray-300">Connecting to Firebase...</span>
+            <span className="text-gray-300">Menghubungkan ke Firebase...</span>
           </div>
         )}
 
@@ -571,8 +571,8 @@ const App: React.FC = () => {
               <div>
                 <p className="text-red-200 font-medium">⚠️ Bot Bukan Moderator!</p>
                 <p className="text-sm text-red-300/80 mt-1">
-                  Bot "{modStatus.botName}" tidak memiliki akses moderator di channel ini. 
-                  Auto-delete dan ban tidak akan berfungsi. Minta owner channel untuk add bot sebagai moderator.
+                  Bot "{modStatus.botName}" tidak punya akses moderator di channel ini. 
+                  Auto-delete dan ban tidak akan berfungsi. Minta owner channel untuk menambahkan bot sebagai moderator.
                 </p>
               </div>
             </div>
@@ -591,10 +591,10 @@ const App: React.FC = () => {
                   Untuk melihat live chat lengkap, buka langsung di YouTube.
                 </p>
                 <ol className="text-sm text-blue-300/80 list-decimal list-inside space-y-1">
-                  <li>Pastikan bot sudah di-add sebagai <strong>moderator</strong> di channel target</li>
+                  <li>Pastikan bot sudah ditambahkan sebagai <strong>moderator</strong> di channel target</li>
                   <li>Paste link live streaming YouTube di bawah</li>
                   <li>Klik Start Monitoring - spam akan terdeteksi otomatis</li>
-                  <li>Aktifkan Auto-Delete di Settings untuk hapus spam otomatis</li>
+                  <li>Aktifkan Auto-Delete di Settings untuk menghapus spam otomatis</li>
                 </ol>
               </div>
             </div>
@@ -615,7 +615,7 @@ const App: React.FC = () => {
                   {modStatus.isOwner ? '👑 Bot adalah OWNER channel' : '✅ Bot adalah Moderator'}
                 </p>
                 <p className={`text-sm ${modStatus.isOwner ? 'text-purple-300/80' : 'text-emerald-300/80'} mt-1`}>
-                  {modStatus.botName} dapat melakukan delete chat dan ban user secara otomatis.
+                  {modStatus.botName} bisa menghapus chat dan ban user secara otomatis.
                   {modStatus.error && <span className="text-yellow-400 ml-2">({modStatus.error})</span>}
                 </p>
               </div>
@@ -661,7 +661,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2">
               <span className={`flex items-center gap-1.5 ${isMonitoring ? 'text-emerald-400' : 'text-gray-500'}`}>
                 {isMonitoring ? <Wifi size={16} /> : <WifiOff size={16} />}
-                {isMonitoring ? 'MONITORING ACTIVE' : 'OFFLINE'}
+                {isMonitoring ? 'MONITORING AKTIF' : 'OFFLINE'}
               </span>
               {isMonitoring && <span className="text-gray-600">| Poll: {pollingInterval}ms</span>}
               {/* Link to YouTube Live Chat */}

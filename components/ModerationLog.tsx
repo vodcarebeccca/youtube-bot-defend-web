@@ -105,8 +105,8 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
         {filteredEntries.length === 0 && (
           <div className="text-center text-gray-500 mt-20 flex flex-col items-center gap-3">
             <Shield size={48} className="text-gray-700" />
-            <p>No moderation entries yet.</p>
-            <p className="text-sm text-gray-600">Spam messages will appear here when detected.</p>
+            <p>Belum ada log moderasi.</p>
+            <p className="text-sm text-gray-600">Pesan spam akan muncul di sini saat terdeteksi.</p>
           </div>
         )}
 
@@ -156,7 +156,7 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
               {/* Spam Details */}
               {entry.spamKeywords && entry.spamKeywords.length > 0 && (
                 <div className="mt-2 text-xs text-red-400 font-mono">
-                  Detected: {entry.spamKeywords.join(', ')}
+                  Terdeteksi: {entry.spamKeywords.join(', ')}
                 </div>
               )}
             </div>
@@ -166,14 +166,14 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
               <div className="flex flex-col gap-1 justify-center pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 
                   onClick={() => onDelete(entry.id, entry)}
-                  title="Delete Message"
+                  title="Hapus Pesan"
                   className="p-1.5 rounded bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white transition-colors"
                 >
                   <Trash2 size={14} />
                 </button>
                 <button 
                   onClick={() => onTimeout(entry.userId, entry)}
-                  title="Timeout User (5m)"
+                  title="Timeout User (5 menit)"
                   className="p-1.5 rounded bg-gray-800 hover:bg-amber-600 text-gray-400 hover:text-white transition-colors"
                 >
                   <Clock size={14} />
@@ -201,7 +201,7 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
           onClick={() => setAutoScroll(!autoScroll)}
           className={`text-xs px-2 py-1 rounded ${autoScroll ? 'text-emerald-500' : 'text-gray-500'}`}
         >
-          Auto-scroll: {autoScroll ? 'ON' : 'OFF'}
+          Auto-scroll: {autoScroll ? 'AKTIF' : 'MATI'}
         </button>
       </div>
     </div>
