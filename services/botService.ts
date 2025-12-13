@@ -50,30 +50,56 @@ export function initializeBots(): BotToken[] {
 /**
  * Initialize bots from Firebase cloud
  * Falls back to local constants if Firebase fails
+ * Supports both old format (token_data JSON string) and new format (direct access_token/refresh_token)
  */
 export async function initializeBotsFromFirebase(): Promise<BotToken[]> {
   console.log('[BotService] Loading bots from Firebase...');
   
   try {
     const cloudBots = await getCloudBots();
+    console.log('[BotService] Cloud bots raw:', cloudBots);
     
     if (cloudBots.length > 0) {
       const firebaseBots: BotToken[] = [];
       
       for (const cloudBot of cloudBots) {
+        let accessToken = '';
+        let refreshToken = '';
+        let channelId = cloudBot.channel_id || '';
+        
+        // Format 1: Old format with token_data JSON string
         if (cloudBot.has_token && cloudBot.token_data) {
           const tokenData = parseTokenData(cloudBot.token_data);
           if (tokenData && tokenData.refresh_token) {
-            firebaseBots.push({
-              id: parseInt(cloudBot.id) || firebaseBots.length + 1,
-              name: cloudBot.name || `Bot ${cloudBot.id}`,
-              accessToken: tokenData.access_token,
-              refreshToken: tokenData.refresh_token,
-              channelId: tokenData.channel_id || cloudBot.channel_id,
-              expiresAt: 0, // Force refresh
-              source: 'firebase',
-            });
+            accessToken = tokenData.access_token;
+            refreshToken = tokenData.refresh_token;
+            channelId = tokenData.channel_id || channelId;
           }
+        }
+        
+        // Format 2: New format with direct access_token/refresh_token fields
+        // Check if bot has direct token fields (from admin panel web)
+        const botAny = cloudBot as any;
+        if (!refreshToken && botAny.access_token && botAny.refresh_token) {
+          accessToken = botAny.access_token;
+          refreshToken = botAny.refresh_token;
+          console.log(`[BotService] Found direct token format for ${cloudBot.name}`);
+        }
+        
+        // Add bot if we have valid refresh token
+        if (refreshToken) {
+          firebaseBots.push({
+            id: parseInt(cloudBot.id) || firebaseBots.length + 1,
+            name: cloudBot.name || `Bot ${cloudBot.id}`,
+            accessToken: accessToken,
+            refreshToken: refreshToken,
+            channelId: channelId,
+            expiresAt: 0, // Force refresh
+            source: 'firebase',
+          });
+          console.log(`[BotService] ✅ Added bot: ${cloudBot.name}`);
+        } else {
+          console.log(`[BotService] ⚠️ Skipped bot ${cloudBot.name} - no valid token`);
         }
       }
       

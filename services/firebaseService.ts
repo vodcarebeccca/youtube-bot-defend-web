@@ -105,7 +105,10 @@ export interface CloudBotToken {
   avatar_url: string;
   enabled: boolean;
   has_token: boolean;
-  token_data?: string; // JSON string of token
+  token_data?: string; // JSON string of token (old format)
+  // New format - direct token fields
+  access_token?: string;
+  refresh_token?: string;
 }
 
 /**
