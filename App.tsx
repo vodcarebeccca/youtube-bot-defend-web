@@ -19,7 +19,13 @@ import {
     getLatestBroadcast, 
     checkFirebaseConnection,
     getGlobalBlacklist,
-    getJudolPatterns
+    getJudolPatterns,
+    trackSessionStart,
+    trackApiCall,
+    trackSpamDetected,
+    trackMessageDeleted,
+    trackUserBanned,
+    trackUserTimeout
 } from './services/firebaseService';
 import { detectJudol } from './services/spamDetection';
 import { detectSpamWithAI, isAIDetectionAvailable } from './services/aiDetection';
@@ -306,6 +312,11 @@ const App: React.FC = () => {
         quotaUsed: prev.quotaUsed + 1 + actionsCount // 1 untuk list, +1 per action
       }));
 
+      // Track usage to Firebase (async, don't wait)
+      trackApiCall(1 + actionsCount);
+      if (newSpamCount > 0) trackSpamDetected(newSpamCount);
+      if (actionsCount > 0) trackMessageDeleted(actionsCount);
+
     } catch (err: any) {
       console.error("Polling error", err);
       setErrorMsg(err.message || "Gagal mengambil pesan");
@@ -353,6 +364,9 @@ const App: React.FC = () => {
       setMessages([]);
       setModerationLog([]);
       setStats({ totalChat: 0, spamDetected: 0, actionsTaken: 0, quotaUsed: 0 });
+      
+      // Track session start
+      trackSessionStart();
     } catch (err: any) {
       setModCheckLoading(false);
       setErrorMsg(err.message);
@@ -390,6 +404,7 @@ const App: React.FC = () => {
             e.userId === idOrUserId ? { ...e, type: 'banned', actionTaken: true } : e
           ));
         }
+        trackUserBanned();
       } else if (action === 'timeout' && liveChatId) {
         await banUser(liveChatId, idOrUserId, false);
         // Update moderation log
@@ -398,12 +413,14 @@ const App: React.FC = () => {
             e.userId === idOrUserId ? { ...e, type: 'timeout', actionTaken: true } : e
           ));
         }
+        trackUserTimeout();
       }
       setStats(prev => ({
         ...prev,
         actionsTaken: prev.actionsTaken + 1,
         quotaUsed: prev.quotaUsed + 1
       }));
+      trackApiCall(1);
     } catch (err: any) {
       // Check if 403 error (not moderator)
       if (err.message?.includes('bukan moderator') || err.message?.includes('403')) {

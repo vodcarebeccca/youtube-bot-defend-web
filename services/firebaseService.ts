@@ -456,3 +456,102 @@ export async function checkFirebaseConnection(): Promise<boolean> {
     return false;
   }
 }
+
+// ==================== USAGE TRACKING ====================
+
+interface UsageData {
+  total_api_calls: number;
+  spam_detected: number;
+  messages_deleted: number;
+  users_banned: number;
+  users_timeout: number;
+  sessions_count: number;
+}
+
+/**
+ * Get today's usage stats from Firebase
+ */
+async function getTodayUsage(): Promise<UsageData | null> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const url = `${BASE_URL}/webapp_usage/${today}?key=${FIREBASE_CONFIG.apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return firestoreToDict(data) as UsageData;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Track usage - increment counters in Firebase
+ */
+export async function trackUsage(
+  field: 'total_api_calls' | 'spam_detected' | 'messages_deleted' | 'users_banned' | 'users_timeout' | 'sessions_count',
+  amount: number = 1
+): Promise<void> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const current = await getTodayUsage();
+    const currentValue = current ? (current[field] || 0) : 0;
+    
+    const url = `${BASE_URL}/webapp_usage/${today}?key=${FIREBASE_CONFIG.apiKey}`;
+    await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: dictToFirestore({
+          date: today,
+          [field]: currentValue + amount,
+          updated_at: new Date().toISOString(),
+        }),
+      }),
+    });
+  } catch (e) {
+    // Silent fail - don't break app for analytics
+    console.error('[Firebase] Track usage error:', e);
+  }
+}
+
+/**
+ * Track new session start
+ */
+export async function trackSessionStart(): Promise<void> {
+  await trackUsage('sessions_count', 1);
+}
+
+/**
+ * Track API call
+ */
+export async function trackApiCall(count: number = 1): Promise<void> {
+  await trackUsage('total_api_calls', count);
+}
+
+/**
+ * Track spam detected
+ */
+export async function trackSpamDetected(count: number = 1): Promise<void> {
+  await trackUsage('spam_detected', count);
+}
+
+/**
+ * Track message deleted
+ */
+export async function trackMessageDeleted(count: number = 1): Promise<void> {
+  await trackUsage('messages_deleted', count);
+}
+
+/**
+ * Track user banned
+ */
+export async function trackUserBanned(): Promise<void> {
+  await trackUsage('users_banned', 1);
+}
+
+/**
+ * Track user timeout
+ */
+export async function trackUserTimeout(): Promise<void> {
+  await trackUsage('users_timeout', 1);
+}

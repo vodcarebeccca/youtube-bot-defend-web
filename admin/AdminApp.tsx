@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Users, MessageSquare, Settings, BarChart3, 
   Bell, Ban, Key, Cloud, CloudOff, RefreshCw, 
-  Plus, Trash2, Check, X, AlertTriangle, Send
+  Plus, Trash2, Check, X, AlertTriangle, Send, Clock
 } from 'lucide-react';
 
 // Import admin services
@@ -30,6 +30,8 @@ import {
   getLicenses,
   addLicense,
   revokeLicense,
+  getTotalUsage,
+  getUsageStats,
 } from './adminService';
 
 type TabType = 'dashboard' | 'bots' | 'patterns' | 'blacklist' | 'broadcasts' | 'reports' | 'licenses' | 'settings';
@@ -186,6 +188,7 @@ const AdminApp: React.FC = () => {
 // Dashboard Tab
 const DashboardTab: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
+  const [usage, setUsage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -194,8 +197,12 @@ const DashboardTab: React.FC = () => {
 
   const loadStats = async () => {
     setLoading(true);
-    const data = await getWebAppStats();
-    setStats(data);
+    const [statsData, usageData] = await Promise.all([
+      getWebAppStats(),
+      getTotalUsage(),
+    ]);
+    setStats(statsData);
+    setUsage(usageData);
     setLoading(false);
   };
 
@@ -205,24 +212,67 @@ const DashboardTab: React.FC = () => {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Dashboard</h2>
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-2xl font-bold">Dashboard</h2>
+        <button 
+          onClick={loadStats}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+        >
+          <RefreshCw size={16} /> Refresh
+        </button>
+      </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Config Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard title="Total Bots" value={stats?.totalBots || 0} icon={<Users />} color="blue" />
         <StatCard title="Spam Patterns" value={stats?.totalPatterns || 0} icon={<MessageSquare />} color="emerald" />
         <StatCard title="Blacklisted Users" value={stats?.totalBlacklist || 0} icon={<Ban />} color="red" />
-        <StatCard title="Active Licenses" value={stats?.totalLicenses || 0} icon={<Key />} color="purple" />
+        <StatCard title="Pending Reports" value={stats?.pendingReports || 0} icon={<AlertTriangle />} color="yellow" />
+      </div>
+
+      {/* Usage Stats */}
+      <h3 className="text-lg font-semibold mb-4 text-gray-300">📊 Total Usage (All Time)</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total API Calls" value={usage?.totalApiCalls || 0} icon={<BarChart3 />} color="purple" />
+        <StatCard title="Spam Terdeteksi" value={usage?.totalSpamDetected || 0} icon={<Shield />} color="red" />
+        <StatCard title="Pesan Dihapus" value={usage?.totalDeleted || 0} icon={<Trash2 />} color="emerald" />
+        <StatCard title="User Dibanned" value={usage?.totalBanned || 0} icon={<Ban />} color="red" />
+      </div>
+
+      {/* Today Stats */}
+      <h3 className="text-lg font-semibold mb-4 text-gray-300">📅 Hari Ini</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <StatCard title="API Calls Hari Ini" value={usage?.todayApiCalls || 0} icon={<BarChart3 />} color="blue" />
+        <StatCard title="Spam Hari Ini" value={usage?.todaySpamDetected || 0} icon={<Shield />} color="emerald" />
+        <StatCard title="Total Sessions" value={usage?.totalSessions || 0} icon={<Users />} color="purple" />
+        <StatCard title="User Timeout" value={usage?.totalTimeout || 0} icon={<Clock />} color="yellow" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4">Recent Activity</h3>
-          <p className="text-gray-500 text-sm">No recent activity</p>
+          <h3 className="text-lg font-semibold mb-4">ℹ️ Info</h3>
+          <div className="space-y-2 text-sm text-gray-400">
+            <p>• Data usage diupdate setiap kali user pakai web app</p>
+            <p>• API Calls = jumlah request ke YouTube API</p>
+            <p>• Pakai OAuth jadi tidak ada batas quota harian</p>
+            <p>• Data tersimpan di Firebase collection <code className="bg-gray-700 px-1 rounded">webapp_usage</code></p>
+          </div>
         </div>
         
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-          <h3 className="text-lg font-semibold mb-4">Pending Reports</h3>
-          <p className="text-gray-500 text-sm">{stats?.pendingReports || 0} reports pending review</p>
+          <h3 className="text-lg font-semibold mb-4">🔧 Quick Actions</h3>
+          <div className="space-y-2">
+            <p className="text-sm text-gray-400">
+              {stats?.pendingReports > 0 
+                ? `⚠️ Ada ${stats.pendingReports} report menunggu review`
+                : '✅ Tidak ada report pending'}
+            </p>
+            <p className="text-sm text-gray-400">
+              {stats?.totalBots > 0 
+                ? `✅ ${stats.totalBots} bot aktif`
+                : '⚠️ Belum ada bot - tambahkan di tab Bot Tokens'}
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -235,14 +285,15 @@ const StatCard: React.FC<{ title: string; value: number; icon: React.ReactNode; 
     emerald: 'bg-emerald-900/20 border-emerald-900/50 text-emerald-400',
     red: 'bg-red-900/20 border-red-900/50 text-red-400',
     purple: 'bg-purple-900/20 border-purple-900/50 text-purple-400',
+    yellow: 'bg-yellow-900/20 border-yellow-900/50 text-yellow-400',
   };
 
   return (
-    <div className={`rounded-xl p-6 border ${colorClasses[color]}`}>
+    <div className={`rounded-xl p-6 border ${colorClasses[color] || colorClasses.blue}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm opacity-80">{title}</p>
-          <p className="text-3xl font-bold mt-1">{value}</p>
+          <p className="text-3xl font-bold mt-1">{value.toLocaleString()}</p>
         </div>
         <div className="opacity-50">{icon}</div>
       </div>

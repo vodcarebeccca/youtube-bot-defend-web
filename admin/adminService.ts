@@ -522,3 +522,122 @@ export async function logAnalytics(event: string, data: Record<string, any> = {}
     // Silent fail for analytics
   }
 }
+
+// ==================== USAGE STATS ====================
+
+export interface UsageStats {
+  _id?: string;
+  date: string;
+  total_api_calls: number;
+  spam_detected: number;
+  messages_deleted: number;
+  users_banned: number;
+  users_timeout: number;
+  sessions_count: number;
+  updated_at: string;
+}
+
+export async function getUsageStats(): Promise<UsageStats[]> {
+  try {
+    const url = `${BASE_URL}/webapp_usage?key=${FIREBASE_CONFIG.apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (data.documents || []).map(firestoreToDict) as UsageStats[];
+  } catch (e) {
+    console.error('[AdminService] Get usage stats error:', e);
+    return [];
+  }
+}
+
+export async function getTodayUsage(): Promise<UsageStats | null> {
+  try {
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const url = `${BASE_URL}/webapp_usage/${today}?key=${FIREBASE_CONFIG.apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return firestoreToDict(data) as UsageStats;
+  } catch (e) {
+    console.error('[AdminService] Get today usage error:', e);
+    return null;
+  }
+}
+
+export async function incrementUsage(field: 'total_api_calls' | 'spam_detected' | 'messages_deleted' | 'users_banned' | 'users_timeout' | 'sessions_count', amount: number = 1): Promise<boolean> {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get current stats
+    const current = await getTodayUsage();
+    const currentValue = current ? (current[field] || 0) : 0;
+    
+    const url = `${BASE_URL}/webapp_usage/${today}?key=${FIREBASE_CONFIG.apiKey}`;
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: dictToFirestore({
+          date: today,
+          [field]: currentValue + amount,
+          updated_at: new Date().toISOString(),
+        }),
+      }),
+    });
+    return response.ok;
+  } catch (e) {
+    console.error('[AdminService] Increment usage error:', e);
+    return false;
+  }
+}
+
+export async function getTotalUsage(): Promise<{
+  totalApiCalls: number;
+  totalSpamDetected: number;
+  totalDeleted: number;
+  totalBanned: number;
+  totalTimeout: number;
+  totalSessions: number;
+  todayApiCalls: number;
+  todaySpamDetected: number;
+}> {
+  try {
+    const allStats = await getUsageStats();
+    const today = new Date().toISOString().split('T')[0];
+    const todayStats = allStats.find(s => s.date === today);
+    
+    const totals = allStats.reduce((acc, stat) => ({
+      totalApiCalls: acc.totalApiCalls + (stat.total_api_calls || 0),
+      totalSpamDetected: acc.totalSpamDetected + (stat.spam_detected || 0),
+      totalDeleted: acc.totalDeleted + (stat.messages_deleted || 0),
+      totalBanned: acc.totalBanned + (stat.users_banned || 0),
+      totalTimeout: acc.totalTimeout + (stat.users_timeout || 0),
+      totalSessions: acc.totalSessions + (stat.sessions_count || 0),
+    }), {
+      totalApiCalls: 0,
+      totalSpamDetected: 0,
+      totalDeleted: 0,
+      totalBanned: 0,
+      totalTimeout: 0,
+      totalSessions: 0,
+    });
+    
+    return {
+      ...totals,
+      todayApiCalls: todayStats?.total_api_calls || 0,
+      todaySpamDetected: todayStats?.spam_detected || 0,
+    };
+  } catch (e) {
+    console.error('[AdminService] Get total usage error:', e);
+    return {
+      totalApiCalls: 0,
+      totalSpamDetected: 0,
+      totalDeleted: 0,
+      totalBanned: 0,
+      totalTimeout: 0,
+      totalSessions: 0,
+      todayApiCalls: 0,
+      todaySpamDetected: 0,
+    };
+  }
+}
