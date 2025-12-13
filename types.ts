@@ -33,8 +33,22 @@ export interface SpamResult {
 
 export enum FilterType {
   ALL = 'ALL',
-  SPAM_ONLY = 'SPAM_ONLY',
-  CLEAN_ONLY = 'CLEAN_ONLY'
+  SPAM_ONLY = 'SPAM_ONLY',      // Pending (spam detected, not actioned)
+  CLEAN_ONLY = 'CLEAN_ONLY'     // Actioned (deleted/banned/timeout)
+}
+
+// Moderation Log Entry - for the new Moderation Log Viewer
+export interface ModerationEntry {
+  id: string;
+  type: 'spam_detected' | 'deleted' | 'timeout' | 'banned';
+  username: string;
+  userId: string;
+  userPhoto?: string;
+  message: string;
+  spamScore?: number;
+  spamKeywords?: string[];
+  timestamp: string;
+  actionTaken: boolean;
 }
 
 export interface AppSettings {

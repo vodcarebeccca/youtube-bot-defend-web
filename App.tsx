@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import StatsCards from './components/StatsCards';
-import ChatList from './components/ChatList';
+import ModerationLog from './components/ModerationLog';
 import SettingsPanel from './components/SettingsPanel';
 import { 
     getLiveChatId, 
@@ -22,8 +22,8 @@ import {
     getJudolPatterns
 } from './services/firebaseService';
 import { detectJudol } from './services/spamDetection';
-import { ChatMessage, DashboardStats, FilterType, AppSettings } from './types';
-import { Play, Square, Wifi, WifiOff, Settings, Volume2, VolumeX, Bot, Shield, ShieldCheck, ShieldAlert, Crown } from 'lucide-react';
+import { ChatMessage, DashboardStats, FilterType, AppSettings, ModerationEntry } from './types';
+import { Play, Square, Wifi, WifiOff, Settings, Volume2, VolumeX, Bot, Shield, ShieldCheck, ShieldAlert, Crown, ExternalLink } from 'lucide-react';
 
 // Sound notification
 const playNotificationSound = () => {
@@ -70,8 +70,9 @@ const App: React.FC = () => {
     blacklist: [],
   });
   
-  // Data State
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Data State - Now focused on moderation log only
+  const [messages, setMessages] = useState<ChatMessage[]>([]); // All messages (for processing)
+  const [moderationLog, setModerationLog] = useState<ModerationEntry[]>([]); // Only spam/deleted/banned
   const [stats, setStats] = useState<DashboardStats>({
     totalChat: 0,
     spamDetected: 0,
@@ -188,6 +189,20 @@ const App: React.FC = () => {
       const canDoActions = modStatus?.isModerator !== false; // Allow if mod or unknown
       
       for (const spam of spamMessages) {
+        // Add to moderation log (spam detected)
+        const logEntry: ModerationEntry = {
+          id: spam.id,
+          type: 'spam_detected',
+          username: spam.username,
+          userId: spam.userId,
+          userPhoto: spam.userPhoto,
+          message: spam.message,
+          spamScore: spam.spamScore,
+          spamKeywords: spam.spamKeywords,
+          timestamp: new Date().toISOString(),
+          actionTaken: false,
+        };
+        
         if (canDoActions) {
           if (settings.autoDelete && !spam.deleted) {
             deleteMessage(spam.id)
@@ -197,6 +212,10 @@ const App: React.FC = () => {
                   updateModStatusCache(liveChatId, true);
                   setModStatus(prev => prev ? { ...prev, isModerator: true, error: undefined } : prev);
                 }
+                // Update log entry as deleted
+                setModerationLog(prev => prev.map(entry => 
+                  entry.id === spam.id ? { ...entry, type: 'deleted', actionTaken: true } : entry
+                ));
               })
               .catch((err) => {
                 console.error('Auto-delete failed:', err);
@@ -207,14 +226,29 @@ const App: React.FC = () => {
                 }
               });
             spam.deleted = true;
+            logEntry.type = 'deleted';
+            logEntry.actionTaken = true;
           }
           if (settings.autoTimeout && liveChatId) {
             banUser(liveChatId, spam.userId, false).catch(console.error);
+            logEntry.type = 'timeout';
+            logEntry.actionTaken = true;
           }
           if (settings.autoBan && liveChatId) {
             banUser(liveChatId, spam.userId, true).catch(console.error);
+            logEntry.type = 'banned';
+            logEntry.actionTaken = true;
           }
         }
+        
+        // Add to moderation log
+        setModerationLog(prev => {
+          const exists = prev.some(e => e.id === logEntry.id);
+          if (exists) return prev;
+          const updated = [logEntry, ...prev];
+          if (updated.length > 200) return updated.slice(0, 200);
+          return updated;
+        });
       }
 
       // Sound notification
@@ -224,7 +258,7 @@ const App: React.FC = () => {
       }
       lastSpamCountRef.current = stats.spamDetected + newSpamCount;
 
-      // Update State
+      // Update internal messages state (for tracking processed IDs)
       setMessages(prev => {
         const existingIds = new Set(prev.map(m => m.id));
         const uniqueNew = processedMessages.filter(m => !existingIds.has(m.id));
@@ -288,6 +322,7 @@ const App: React.FC = () => {
       
       setIsMonitoring(true);
       setMessages([]);
+      setModerationLog([]);
       setStats({ totalChat: 0, spamDetected: 0, actionsTaken: 0, quotaUsed: 0 });
     } catch (err: any) {
       setModCheckLoading(false);
@@ -304,11 +339,15 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAction = async (action: 'delete' | 'ban' | 'timeout', idOrUserId: string) => {
+  const handleAction = async (action: 'delete' | 'ban' | 'timeout', idOrUserId: string, entry?: ModerationEntry) => {
     try {
       if (action === 'delete') {
         await deleteMessage(idOrUserId);
         setMessages(prev => prev.map(m => m.id === idOrUserId ? { ...m, deleted: true } : m));
+        // Update moderation log
+        setModerationLog(prev => prev.map(e => 
+          e.id === idOrUserId ? { ...e, type: 'deleted', actionTaken: true } : e
+        ));
         // Action succeeded - confirm bot is moderator
         if (liveChatId && modStatus && !modStatus.isModerator) {
           updateModStatusCache(liveChatId, true);
@@ -316,8 +355,20 @@ const App: React.FC = () => {
         }
       } else if (action === 'ban' && liveChatId) {
         await banUser(liveChatId, idOrUserId, true);
+        // Update moderation log
+        if (entry) {
+          setModerationLog(prev => prev.map(e => 
+            e.userId === idOrUserId ? { ...e, type: 'banned', actionTaken: true } : e
+          ));
+        }
       } else if (action === 'timeout' && liveChatId) {
         await banUser(liveChatId, idOrUserId, false);
+        // Update moderation log
+        if (entry) {
+          setModerationLog(prev => prev.map(e => 
+            e.userId === idOrUserId ? { ...e, type: 'timeout', actionTaken: true } : e
+          ));
+        }
       }
       setStats(prev => ({
         ...prev,
@@ -337,19 +388,27 @@ const App: React.FC = () => {
   };
 
   const exportLog = () => {
-    const spamLogs = messages.filter(m => m.isSpam).map(m => ({
-      time: new Date(m.timestamp).toLocaleString(),
-      user: m.username,
-      message: m.message,
-      score: m.spamScore,
-      keywords: m.spamKeywords?.join(', ')
+    const exportData = moderationLog.map(entry => ({
+      time: new Date(entry.timestamp).toLocaleString(),
+      type: entry.type,
+      user: entry.username,
+      message: entry.message,
+      score: entry.spamScore,
+      keywords: entry.spamKeywords?.join(', '),
+      actionTaken: entry.actionTaken
     }));
-    const blob = new Blob([JSON.stringify(spamLogs, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `spam-log-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = `moderation-log-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
+  };
+
+  // Get YouTube video URL for opening live chat
+  const getYouTubeUrl = () => {
+    const videoId = extractVideoId(videoUrl);
+    return videoId ? `https://www.youtube.com/watch?v=${videoId}` : '';
   };
 
   return (
@@ -497,8 +556,12 @@ const App: React.FC = () => {
             <div className="flex items-start gap-3">
               <Shield className="text-blue-500 mt-0.5" size={20} />
               <div>
-                <p className="text-blue-200 font-medium">Cara Penggunaan:</p>
-                <ol className="text-sm text-blue-300/80 mt-1 list-decimal list-inside space-y-1">
+                <p className="text-blue-200 font-medium">🛡️ Moderation Log Viewer</p>
+                <p className="text-sm text-blue-300/80 mt-1 mb-2">
+                  Web app ini menampilkan <strong>log moderasi</strong> saja (spam terdeteksi, pesan dihapus, user di-ban).
+                  Untuk melihat live chat lengkap, buka langsung di YouTube.
+                </p>
+                <ol className="text-sm text-blue-300/80 list-decimal list-inside space-y-1">
                   <li>Pastikan bot sudah di-add sebagai <strong>moderator</strong> di channel target</li>
                   <li>Paste link live streaming YouTube di bawah</li>
                   <li>Klik Start Monitoring - spam akan terdeteksi otomatis</li>
@@ -572,6 +635,18 @@ const App: React.FC = () => {
                 {isMonitoring ? 'MONITORING ACTIVE' : 'OFFLINE'}
               </span>
               {isMonitoring && <span className="text-gray-600">| Poll: {pollingInterval}ms</span>}
+              {/* Link to YouTube Live Chat */}
+              {isMonitoring && getYouTubeUrl() && (
+                <a 
+                  href={getYouTubeUrl()} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-blue-400 hover:text-blue-300 ml-2"
+                >
+                  <ExternalLink size={14} />
+                  Buka Live Chat di YouTube
+                </a>
+              )}
             </div>
             {errorMsg && (
               <span className="text-red-400 font-medium bg-red-900/10 px-2 py-1 rounded border border-red-900/30">
@@ -583,13 +658,13 @@ const App: React.FC = () => {
 
         <StatsCards stats={stats} isMonitoring={isMonitoring} />
 
-        <ChatList 
-          messages={messages} 
+        <ModerationLog 
+          entries={moderationLog} 
           filter={filter}
           setFilter={setFilter}
-          onDelete={(id) => handleAction('delete', id)}
-          onTimeout={(userId) => handleAction('timeout', userId)}
-          onBan={(userId) => handleAction('ban', userId)}
+          onDelete={(id, entry) => handleAction('delete', id, entry)}
+          onTimeout={(userId, entry) => handleAction('timeout', userId, entry)}
+          onBan={(userId, entry) => handleAction('ban', userId, entry)}
         />
       </main>
     </div>
