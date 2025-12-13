@@ -51,8 +51,10 @@ const AdminApp: React.FC = () => {
   }, []);
 
   const handleLogin = () => {
-    // Simple password check (in production, use proper auth)
-    if (adminPassword === 'admin123' || adminPassword === 'ytbotdefend') {
+    // Password from environment variable (secure) or fallback for development
+    const validPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
+    
+    if (adminPassword === validPassword) {
       setIsAuthenticated(true);
       localStorage.setItem('webAppAdminAuth', 'authenticated');
       setError(null);
