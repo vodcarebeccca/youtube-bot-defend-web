@@ -39,6 +39,12 @@ import {
   trackSpamDetected,
   trackMessageDeleted,
 } from './services/firebaseService';
+import { 
+  recordSpamDetection, 
+  recordMessageScan, 
+  recordAction,
+  getSpamType 
+} from './services/analyticsService';
 import { detectJudol } from './services/spamDetection';
 import { detectSpamWithAI, isAIDetectionAvailable } from './services/aiDetection';
 import { ChatMessage, DashboardStats, FilterType, AppSettings, ModerationEntry } from './types';
@@ -289,6 +295,13 @@ const AppContent: React.FC = () => {
       if (spamMessages.length > 0) trackSpamDetected(spamMessages.length);
       if (actionsCount > 0) trackMessageDeleted(actionsCount);
 
+      // Record to analytics
+      recordMessageScan(newMessages.length);
+      for (const spam of spamMessages) {
+        const spamType = getSpamType(spam.spamKeywords || []);
+        recordSpamDetection(spamType, spam.deleted || false);
+      }
+
     } catch (err: any) {
       console.error("Polling error", err);
       setErrorMsg(err.message || "Gagal mengambil pesan");
@@ -367,6 +380,7 @@ const AppContent: React.FC = () => {
       }
       setStats(prev => ({ ...prev, actionsTaken: prev.actionsTaken + 1, quotaUsed: prev.quotaUsed + 1 }));
       trackApiCall(1);
+      recordAction();
     } catch (err: any) {
       alert(`Aksi gagal: ${err.message}`);
     }
@@ -448,7 +462,7 @@ const AppContent: React.FC = () => {
           <DetectionPage settings={settings} setSettings={setSettings} />
         } />
         <Route path="/bots" element={<BotsPage />} />
-        <Route path="/analytics" element={<AnalyticsPage stats={stats} />} />
+        <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/settings" element={
           <SettingsPage settings={settings} setSettings={setSettings} onExportLog={exportLog} />
         } />
