@@ -176,18 +176,20 @@ const App: React.FC = () => {
 
       // Process Messages (Spam Detection)
       const processedMessages = newMessages.map(msg => {
-        // Check whitelist (with null safety)
-        const whitelist = settings.whitelist || [];
-        const blacklist = settings.blacklist || [];
+        // Check whitelist (with full null safety)
+        const whitelist = (settings.whitelist || []).filter(w => w && typeof w === 'string');
+        const blacklist = (settings.blacklist || []).filter(b => b && typeof b === 'string');
+        const username = msg.username || '';
+        const message = msg.message || '';
         
-        if (whitelist.length > 0 && whitelist.some(w => w && msg.username.toLowerCase().includes(w.toLowerCase()))) {
+        if (whitelist.length > 0 && whitelist.some(w => username.toLowerCase().includes(w.toLowerCase()))) {
           return { ...msg, isSpam: false, spamScore: 0, spamKeywords: [] };
         }
-        // Check blacklist (with null safety)
-        if (blacklist.length > 0 && blacklist.some(b => b && msg.username.toLowerCase().includes(b.toLowerCase()))) {
+        // Check blacklist (with full null safety)
+        if (blacklist.length > 0 && blacklist.some(b => username.toLowerCase().includes(b.toLowerCase()))) {
           return { ...msg, isSpam: true, spamScore: 100, spamKeywords: ['blacklisted'] };
         }
-        const spamCheck = detectJudol(msg.message, settings.customSpamWords || []);
+        const spamCheck = detectJudol(message, (settings.customSpamWords || []).filter(w => w && typeof w === 'string'));
         return {
           ...msg,
           isSpam: spamCheck.score >= settings.spamThreshold,
