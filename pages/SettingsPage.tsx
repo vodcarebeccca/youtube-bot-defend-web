@@ -283,7 +283,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         <div className="space-y-2 text-sm">
           {[
             { label: 'Version', value: '2.0.0' },
-            { label: 'Developer', value: 'YouTube Bot Defend Team' },
+            { label: 'Developer', value: 'ZIVER RFL' },
           ].map((item) => (
             <div key={item.label} className="flex justify-between">
               <span style={{ color: colors.textMuted }}>{item.label}</span>
