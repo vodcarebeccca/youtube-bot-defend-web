@@ -389,19 +389,9 @@ const BotsTab: React.FC = () => <BotsTabComponent />;
 
 const PatternsTab: React.FC = () => <PatternsTabComponent />;
 
-const BlacklistTab: React.FC = () => (
-  <div>
-    <h2 className="text-2xl font-bold mb-6">Global Blacklist</h2>
-    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <p className="text-gray-400 mb-4">
-        Blacklist users yang akan otomatis di-ban di semua channel.
-      </p>
-      <p className="text-sm text-gray-500">
-        Collection: <code className="bg-gray-700 px-2 py-1 rounded">webapp_blacklist</code>
-      </p>
-    </div>
-  </div>
-);
+import BlacklistTabComponent from './tabs/BlacklistTab';
+
+const BlacklistTab: React.FC = () => <BlacklistTabComponent />;
 
 const BroadcastsTab: React.FC = () => <BroadcastsTabComponent />;
 
