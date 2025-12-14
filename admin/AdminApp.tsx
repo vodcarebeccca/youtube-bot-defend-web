@@ -32,6 +32,9 @@ import {
   revokeLicense,
   getTotalUsage,
   getUsageStats,
+  getUserStats,
+  getActiveUsers,
+  UserActivity,
 } from './adminService';
 
 type TabType = 'dashboard' | 'bots' | 'patterns' | 'blacklist' | 'broadcasts' | 'reports' | 'licenses' | 'settings';
@@ -189,6 +192,8 @@ const AdminApp: React.FC = () => {
 const DashboardTab: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [usage, setUsage] = useState<any>(null);
+  const [userStats, setUserStats] = useState<any>(null);
+  const [topUsers, setTopUsers] = useState<UserActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -197,12 +202,15 @@ const DashboardTab: React.FC = () => {
 
   const loadStats = async () => {
     setLoading(true);
-    const [statsData, usageData] = await Promise.all([
+    const [statsData, usageData, userStatsData] = await Promise.all([
       getWebAppStats(),
       getTotalUsage(),
+      getUserStats(),
     ]);
     setStats(statsData);
     setUsage(usageData);
+    setUserStats(userStatsData);
+    setTopUsers(userStatsData?.topUsers || []);
     setLoading(false);
   };
 
@@ -221,8 +229,25 @@ const DashboardTab: React.FC = () => {
           <RefreshCw size={16} /> Refresh
         </button>
       </div>
+
+      {/* USER STATS - For Quota Request Evidence */}
+      <h3 className="text-lg font-semibold mb-4 text-gray-300">👥 User Statistics (Bukti untuk Request Quota)</h3>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total Users" value={userStats?.totalUsers || 0} icon={<Users />} color="purple" />
+        <StatCard title="Active Today" value={userStats?.activeToday || 0} icon={<Users />} color="emerald" />
+        <StatCard title="Active This Week" value={userStats?.activeThisWeek || 0} icon={<Users />} color="blue" />
+        <StatCard title="Active This Month" value={userStats?.activeThisMonth || 0} icon={<Users />} color="yellow" />
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard title="New Users Today" value={userStats?.newUsersToday || 0} icon={<Plus />} color="emerald" />
+        <StatCard title="New Users This Week" value={userStats?.newUsersThisWeek || 0} icon={<Plus />} color="blue" />
+        <StatCard title="Spam Patterns" value={stats?.totalPatterns || 0} icon={<MessageSquare />} color="red" />
+        <StatCard title="Pending Reports" value={stats?.pendingReports || 0} icon={<AlertTriangle />} color="yellow" />
+      </div>
       
       {/* Config Stats */}
+      <h3 className="text-lg font-semibold mb-4 text-gray-300">⚙️ Configuration</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard title="Total Bots" value={stats?.totalBots || 0} icon={<Users />} color="blue" />
         <StatCard title="Spam Patterns" value={stats?.totalPatterns || 0} icon={<MessageSquare />} color="emerald" />
@@ -249,13 +274,61 @@ const DashboardTab: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Users */}
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">🏆 Top Active Users</h3>
+          {topUsers.length > 0 ? (
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {topUsers.map((user, index) => (
+                <div key={user.user_id} className="flex items-center justify-between text-sm bg-gray-700/50 rounded-lg p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500 w-6">{index + 1}.</span>
+                    <span className="text-gray-300 truncate max-w-[150px]">
+                      {user.channel_name || user.user_id.substring(0, 15)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="text-emerald-400">{user.total_spam_blocked} spam</span>
+                    <span className="text-blue-400">{user.total_actions} actions</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm">Belum ada data user</p>
+          )}
+        </div>
+        
+        <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
+          <h3 className="text-lg font-semibold mb-4">📋 Summary untuk Request Quota</h3>
+          <div className="space-y-3 text-sm">
+            <div className="bg-gray-700/50 rounded-lg p-3">
+              <p className="text-gray-400 mb-1">Total Registered Users:</p>
+              <p className="text-2xl font-bold text-emerald-400">{userStats?.totalUsers || 0}</p>
+            </div>
+            <div className="bg-gray-700/50 rounded-lg p-3">
+              <p className="text-gray-400 mb-1">Monthly Active Users (MAU):</p>
+              <p className="text-2xl font-bold text-blue-400">{userStats?.activeThisMonth || 0}</p>
+            </div>
+            <div className="bg-gray-700/50 rounded-lg p-3">
+              <p className="text-gray-400 mb-1">Total Spam Blocked:</p>
+              <p className="text-2xl font-bold text-red-400">{usage?.totalSpamDetected || 0}</p>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Screenshot halaman ini sebagai bukti untuk request quota tambahan ke Google.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
           <h3 className="text-lg font-semibold mb-4">ℹ️ Info</h3>
           <div className="space-y-2 text-sm text-gray-400">
-            <p>• Data usage diupdate setiap kali user pakai web app</p>
-            <p>• API Calls = jumlah request ke YouTube API</p>
-            <p>• Pakai OAuth jadi tidak ada batas quota harian</p>
-            <p>• Data tersimpan di Firebase collection <code className="bg-gray-700 px-1 rounded">webapp_usage</code></p>
+            <p>• User tracking otomatis saat login OAuth</p>
+            <p>• Data tersimpan di Firebase collection <code className="bg-gray-700 px-1 rounded">webapp_users</code></p>
+            <p>• MAU = Monthly Active Users (aktif dalam 30 hari)</p>
+            <p>• Screenshot dashboard ini untuk bukti request quota</p>
           </div>
         </div>
         
@@ -271,6 +344,11 @@ const DashboardTab: React.FC = () => {
               {stats?.totalBots > 0 
                 ? `✅ ${stats.totalBots} bot aktif`
                 : '⚠️ Belum ada bot - tambahkan di tab Bot Tokens'}
+            </p>
+            <p className="text-sm text-gray-400">
+              {userStats?.totalUsers > 0 
+                ? `✅ ${userStats.totalUsers} user terdaftar`
+                : '⚠️ Belum ada user - promosikan web app'}
             </p>
           </div>
         </div>

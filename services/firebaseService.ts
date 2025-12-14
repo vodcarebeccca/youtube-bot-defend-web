@@ -563,3 +563,97 @@ export async function trackUserBanned(): Promise<void> {
 export async function trackUserTimeout(): Promise<void> {
   await trackUsage('users_timeout', 1);
 }
+
+// ==================== USER ACTIVITY TRACKING ====================
+
+interface UserActivityData {
+  user_id: string;
+  channel_name: string;
+  last_active: string;
+  first_seen: string;
+  total_sessions: number;
+  total_spam_blocked: number;
+  total_actions: number;
+  device_info: string;
+}
+
+/**
+ * Track user activity for admin dashboard
+ * Called when user starts monitoring
+ */
+export async function trackUserActivity(
+  channelId: string,
+  channelName: string = ''
+): Promise<void> {
+  try {
+    const safeUserId = channelId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const url = `${BASE_URL}/webapp_users/${safeUserId}?key=${FIREBASE_CONFIG.apiKey}`;
+    
+    // Get existing user data
+    const existingResponse = await fetch(url);
+    let existingData: UserActivityData | null = null;
+    if (existingResponse.ok) {
+      existingData = firestoreToDict(await existingResponse.json()) as UserActivityData;
+    }
+    
+    const now = new Date().toISOString();
+    const deviceInfo = `${navigator.userAgent.substring(0, 100)}`;
+    
+    const updateData: UserActivityData = {
+      user_id: channelId,
+      channel_name: channelName || existingData?.channel_name || '',
+      last_active: now,
+      first_seen: existingData?.first_seen || now,
+      total_sessions: (existingData?.total_sessions || 0) + 1,
+      total_spam_blocked: existingData?.total_spam_blocked || 0,
+      total_actions: existingData?.total_actions || 0,
+      device_info: deviceInfo,
+    };
+    
+    await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: dictToFirestore(updateData) }),
+    });
+    
+    console.log('[Firebase] User activity tracked:', channelId);
+  } catch (e) {
+    // Silent fail - don't break app for analytics
+    console.error('[Firebase] Track user activity error:', e);
+  }
+}
+
+/**
+ * Update user stats (spam blocked, actions taken)
+ */
+export async function updateUserStats(
+  channelId: string,
+  field: 'total_spam_blocked' | 'total_actions',
+  increment: number = 1
+): Promise<void> {
+  try {
+    const safeUserId = channelId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const url = `${BASE_URL}/webapp_users/${safeUserId}?key=${FIREBASE_CONFIG.apiKey}`;
+    
+    // Get current value
+    const response = await fetch(url);
+    let currentValue = 0;
+    if (response.ok) {
+      const data = firestoreToDict(await response.json());
+      currentValue = data[field] || 0;
+    }
+    
+    await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: dictToFirestore({
+          [field]: currentValue + increment,
+          last_active: new Date().toISOString(),
+        }),
+      }),
+    });
+  } catch (e) {
+    console.error('[Firebase] Update user stats error:', e);
+  }
+}

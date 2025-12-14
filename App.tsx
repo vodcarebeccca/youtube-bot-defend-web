@@ -38,6 +38,7 @@ import {
   trackApiCall,
   trackSpamDetected,
   trackMessageDeleted,
+  trackUserActivity,
 } from './services/firebaseService';
 import { 
   recordSpamDetection, 
@@ -342,6 +343,11 @@ const AppContent: React.FC = () => {
       setModerationLog([]);
       setStats({ totalChat: 0, spamDetected: 0, actionsTaken: 0, quotaUsed: 0 });
       trackSessionStart();
+      
+      // Track user activity for admin dashboard
+      if (status?.channelId) {
+        trackUserActivity(status.channelId, status.botName || '');
+      }
     } catch (err: any) {
       setErrorMsg(err.message);
     }

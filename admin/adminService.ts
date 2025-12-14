@@ -641,3 +641,180 @@ export async function getTotalUsage(): Promise<{
     };
   }
 }
+
+// ==================== USER TRACKING ====================
+
+export interface UserActivity {
+  _id?: string;
+  user_id: string;
+  channel_name?: string;
+  email?: string;
+  last_active: string;
+  first_seen: string;
+  total_sessions: number;
+  total_spam_blocked: number;
+  total_actions: number;
+  device_info?: string;
+}
+
+/**
+ * Get all tracked users
+ */
+export async function getActiveUsers(): Promise<UserActivity[]> {
+  try {
+    const url = `${BASE_URL}/webapp_users?key=${FIREBASE_CONFIG.apiKey}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = await response.json();
+    return (data.documents || []).map(firestoreToDict) as UserActivity[];
+  } catch (e) {
+    console.error('[AdminService] Get users error:', e);
+    return [];
+  }
+}
+
+/**
+ * Track user activity (called from web app when user logs in/uses app)
+ */
+export async function trackUserActivity(userData: {
+  user_id: string;
+  channel_name?: string;
+  email?: string;
+  device_info?: string;
+}): Promise<boolean> {
+  try {
+    const userId = userData.user_id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const url = `${BASE_URL}/webapp_users/${userId}?key=${FIREBASE_CONFIG.apiKey}`;
+    
+    // Get existing user data
+    const existingResponse = await fetch(url);
+    let existingData: UserActivity | null = null;
+    if (existingResponse.ok) {
+      existingData = firestoreToDict(await existingResponse.json()) as UserActivity;
+    }
+    
+    const now = new Date().toISOString();
+    const updateData: UserActivity = {
+      user_id: userData.user_id,
+      channel_name: userData.channel_name || existingData?.channel_name || '',
+      email: userData.email || existingData?.email || '',
+      last_active: now,
+      first_seen: existingData?.first_seen || now,
+      total_sessions: (existingData?.total_sessions || 0) + 1,
+      total_spam_blocked: existingData?.total_spam_blocked || 0,
+      total_actions: existingData?.total_actions || 0,
+      device_info: userData.device_info || existingData?.device_info || '',
+    };
+    
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: dictToFirestore(updateData) }),
+    });
+    return response.ok;
+  } catch (e) {
+    console.error('[AdminService] Track user error:', e);
+    return false;
+  }
+}
+
+/**
+ * Update user stats (spam blocked, actions taken)
+ */
+export async function updateUserStats(
+  userId: string, 
+  field: 'total_spam_blocked' | 'total_actions',
+  increment: number = 1
+): Promise<boolean> {
+  try {
+    const safeUserId = userId.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const url = `${BASE_URL}/webapp_users/${safeUserId}?key=${FIREBASE_CONFIG.apiKey}`;
+    
+    // Get current value
+    const response = await fetch(url);
+    let currentValue = 0;
+    if (response.ok) {
+      const data = firestoreToDict(await response.json());
+      currentValue = data[field] || 0;
+    }
+    
+    const updateResponse = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: dictToFirestore({
+          [field]: currentValue + increment,
+          last_active: new Date().toISOString(),
+        }),
+      }),
+    });
+    return updateResponse.ok;
+  } catch (e) {
+    console.error('[AdminService] Update user stats error:', e);
+    return false;
+  }
+}
+
+/**
+ * Get user statistics summary
+ */
+export async function getUserStats(): Promise<{
+  totalUsers: number;
+  activeToday: number;
+  activeThisWeek: number;
+  activeThisMonth: number;
+  newUsersToday: number;
+  newUsersThisWeek: number;
+  topUsers: UserActivity[];
+}> {
+  try {
+    const users = await getActiveUsers();
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    
+    let activeToday = 0;
+    let activeThisWeek = 0;
+    let activeThisMonth = 0;
+    let newUsersToday = 0;
+    let newUsersThisWeek = 0;
+    
+    for (const user of users) {
+      const lastActive = new Date(user.last_active);
+      const firstSeen = new Date(user.first_seen);
+      
+      if (lastActive >= today) activeToday++;
+      if (lastActive >= weekAgo) activeThisWeek++;
+      if (lastActive >= monthAgo) activeThisMonth++;
+      if (firstSeen >= today) newUsersToday++;
+      if (firstSeen >= weekAgo) newUsersThisWeek++;
+    }
+    
+    // Top users by total actions
+    const topUsers = [...users]
+      .sort((a, b) => (b.total_actions + b.total_spam_blocked) - (a.total_actions + a.total_spam_blocked))
+      .slice(0, 10);
+    
+    return {
+      totalUsers: users.length,
+      activeToday,
+      activeThisWeek,
+      activeThisMonth,
+      newUsersToday,
+      newUsersThisWeek,
+      topUsers,
+    };
+  } catch (e) {
+    console.error('[AdminService] Get user stats error:', e);
+    return {
+      totalUsers: 0,
+      activeToday: 0,
+      activeThisWeek: 0,
+      activeThisMonth: 0,
+      newUsersToday: 0,
+      newUsersThisWeek: 0,
+      topUsers: [],
+    };
+  }
+}
