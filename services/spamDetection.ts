@@ -199,6 +199,92 @@ function detectSpacedSpam(text: string): { isSpam: boolean; word: string; score:
   return { isSpam: false, word: '', score: 0 };
 }
 
+// ==================== #49 REPEATED CHAR DETECTOR ====================
+interface RepeatedCharResult {
+  hasRepeatedBypass: boolean;
+  originalText: string;
+  cleanedText: string;
+  detectedWord: string;
+  score: number;
+}
+
+function detectRepeatedChars(text: string): RepeatedCharResult {
+  let score = 0;
+  let detectedWord = '';
+  
+  // Step 1: Remove repeated consecutive characters (sssslot -> slot, sloooot -> slot)
+  const deduped = text.replace(/(.)\1{2,}/g, '$1');
+  
+  // Step 2: Remove separators between chars (s.l.o.t -> slot, s-l-o-t -> slot, s_l_o_t -> slot)
+  const separatorPatterns = [
+    /([a-zA-Z])[\.\-_\s]+(?=[a-zA-Z])/g,  // a.b.c -> abc
+    /([a-zA-Z])\s+(?=[a-zA-Z])/g,          // a b c -> abc (single spaces)
+  ];
+  
+  let cleaned = deduped;
+  for (const pattern of separatorPatterns) {
+    cleaned = cleaned.replace(pattern, '$1');
+  }
+  
+  // Normalize for keyword matching
+  const normalized = normalizeLeet(cleaned.toLowerCase());
+  
+  // Check if cleaned text contains spam keywords
+  const spamKeywordsToCheck = [
+    'slot', 'gacor', 'maxwin', 'jackpot', 'scatter', 'bonus', 'depo',
+    'togel', 'casino', 'poker', 'judol', 'judi', 'rtp', 'jp',
+    'pragmatic', 'zeus', 'olympus', 'bonanza', 'mahjong', 'starlight',
+    'fortune', 'tiger', 'dragon', 'sultan', 'hoki', 'cuan', 'wede',
+  ];
+  
+  for (const kw of spamKeywordsToCheck) {
+    if (normalized.includes(kw)) {
+      detectedWord = kw;
+      
+      // Check if original text had bypass patterns
+      const originalLower = text.toLowerCase();
+      
+      // Pattern 1: Repeated chars (sssslot, sloooot, gaaaacor)
+      const repeatedPattern = new RegExp(`[${kw[0]}]{2,}|${kw.split('').map(c => `${c}+`).join('')}`, 'i');
+      if (repeatedPattern.test(originalLower) && originalLower !== normalized) {
+        score = Math.max(score, 75);
+      }
+      
+      // Pattern 2: Dotted/separated chars (s.l.o.t, s-l-o-t, s_l_o_t)
+      const dottedPattern = new RegExp(kw.split('').join('[.\\-_\\s]+'), 'i');
+      if (dottedPattern.test(text)) {
+        score = Math.max(score, 80);
+      }
+      
+      // Pattern 3: Mixed (s..l..o..t, sss.lll.ooo.ttt)
+      const mixedPattern = new RegExp(kw.split('').map(c => `${c}+`).join('[.\\-_\\s]*'), 'i');
+      if (mixedPattern.test(text) && text.length > kw.length * 1.5) {
+        score = Math.max(score, 85);
+      }
+    }
+  }
+  
+  // Additional check: excessive repeated characters in general (suspicious)
+  const repeatedCount = (text.match(/(.)\1{3,}/g) || []).length;
+  if (repeatedCount >= 2 && score === 0) {
+    score = 20; // Suspicious but not confirmed spam
+  }
+  
+  // Check for dotted pattern without keyword match (still suspicious)
+  const hasDottedPattern = /[a-zA-Z][\.\-_][a-zA-Z][\.\-_][a-zA-Z][\.\-_][a-zA-Z]/i.test(text);
+  if (hasDottedPattern && score === 0) {
+    score = 30;
+  }
+  
+  return {
+    hasRepeatedBypass: score >= 30,
+    originalText: text,
+    cleanedText: cleaned,
+    detectedWord,
+    score
+  };
+}
+
 // ==================== #46 PHONE NUMBER DETECTOR ====================
 interface PhoneDetectionResult {
   hasPhone: boolean;
@@ -553,6 +639,17 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
     }
   }
   
+  // ==================== #49 REPEATED CHAR DETECTION ====================
+  const repeatedResult = detectRepeatedChars(text);
+  if (repeatedResult.hasRepeatedBypass) {
+    score += repeatedResult.score;
+    if (repeatedResult.detectedWord) {
+      keywordsFound.push(`repeated:${repeatedResult.detectedWord}`);
+    } else {
+      keywordsFound.push('repeated:bypass');
+    }
+  }
+  
   // Check spaced unicode spam
   const spaced = detectSpacedSpam(text);
   if (spaced.isSpam) {
@@ -618,4 +715,4 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
 }
 
 // Export individual detectors for testing/debugging
-export { detectPhoneNumbers, detectLinkShorteners, detectUnicodeBypass };
+export { detectPhoneNumbers, detectLinkShorteners, detectUnicodeBypass, detectRepeatedChars };
