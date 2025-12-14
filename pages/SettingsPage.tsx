@@ -3,6 +3,7 @@
  */
 import React, { useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 import { 
   Settings, 
   Zap, 
@@ -15,7 +16,6 @@ import {
   ExternalLink,
   MessageSquare,
   Send,
-  CheckCircle,
   Bug,
   Lightbulb,
   HelpCircle,
@@ -36,27 +36,36 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
   onExportLog,
 }) => {
   const { colors } = useTheme();
+  const toast = useToast();
   
   // Feedback state
   const [feedbackType, setFeedbackType] = useState<'bug' | 'feature' | 'general'>('general');
   const [feedbackMessage, setFeedbackMessage] = useState('');
   const [feedbackEmail, setFeedbackEmail] = useState('');
   const [feedbackSending, setFeedbackSending] = useState(false);
-  const [feedbackSent, setFeedbackSent] = useState(false);
 
   const handleSubmitFeedback = async () => {
-    if (!feedbackMessage.trim()) return;
+    if (!feedbackMessage.trim()) {
+      toast.warning('Tulis pesan feedback terlebih dahulu');
+      return;
+    }
     
     setFeedbackSending(true);
     const success = await submitFeedback(feedbackType, feedbackMessage, feedbackEmail);
     setFeedbackSending(false);
     
     if (success) {
-      setFeedbackSent(true);
+      toast.success('Feedback berhasil dikirim! Terima kasih 🙏');
       setFeedbackMessage('');
       setFeedbackEmail('');
-      setTimeout(() => setFeedbackSent(false), 3000);
+    } else {
+      toast.error('Gagal mengirim feedback. Coba lagi nanti.');
     }
+  };
+
+  const handleExportLog = () => {
+    onExportLog();
+    toast.success('Log berhasil di-export!');
   };
 
   // Toggle component
@@ -281,8 +290,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
         </h2>
 
         <button
-          onClick={onExportLog}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors"
+          onClick={handleExportLog}
+          className="btn-micro w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium"
           style={{ 
             backgroundColor: colors.bgTertiary,
             color: colors.textPrimary,
@@ -309,99 +318,84 @@ const SettingsPage: React.FC<SettingsPageProps> = ({
           Feedback & Report
         </h2>
 
-        {feedbackSent ? (
-          <div 
-            className="flex items-center gap-3 p-4 rounded-lg"
-            style={{ backgroundColor: colors.success + '20', color: colors.success }}
-          >
-            <CheckCircle size={24} />
-            <div>
-              <p className="font-medium">Terima kasih!</p>
-              <p className="text-sm opacity-80">Feedback kamu sudah terkirim ke admin.</p>
-            </div>
-          </div>
-        ) : (
-          <>
-            {/* Feedback Type */}
-            <div className="flex gap-2">
-              {[
-                { type: 'bug' as const, icon: <Bug size={16} />, label: 'Bug Report' },
-                { type: 'feature' as const, icon: <Lightbulb size={16} />, label: 'Saran Fitur' },
-                { type: 'general' as const, icon: <HelpCircle size={16} />, label: 'Umum' },
-              ].map((item) => (
-                <button
-                  key={item.type}
-                  onClick={() => setFeedbackType(item.type)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors"
-                  style={{
-                    backgroundColor: feedbackType === item.type ? colors.accent : colors.bgTertiary,
-                    color: feedbackType === item.type ? 'white' : colors.textSecondary,
-                  }}
-                >
-                  {item.icon}
-                  {item.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Message */}
-            <textarea
-              value={feedbackMessage}
-              onChange={(e) => setFeedbackMessage(e.target.value)}
-              placeholder={
-                feedbackType === 'bug' 
-                  ? 'Jelaskan bug yang kamu temukan...' 
-                  : feedbackType === 'feature'
-                  ? 'Fitur apa yang kamu inginkan?'
-                  : 'Tulis pesan atau pertanyaan...'
-              }
-              className="w-full p-3 rounded-lg text-sm resize-none"
-              style={{ 
-                backgroundColor: colors.bgTertiary, 
-                color: colors.textPrimary,
-                border: `1px solid ${colors.border}`,
-              }}
-              rows={4}
-            />
-
-            {/* Email (optional) */}
-            <input
-              type="email"
-              value={feedbackEmail}
-              onChange={(e) => setFeedbackEmail(e.target.value)}
-              placeholder="Email (opsional, untuk balasan)"
-              className="w-full p-3 rounded-lg text-sm"
-              style={{ 
-                backgroundColor: colors.bgTertiary, 
-                color: colors.textPrimary,
-                border: `1px solid ${colors.border}`,
-              }}
-            />
-
-            {/* Submit */}
+        {/* Feedback Type */}
+        <div className="flex gap-2">
+          {[
+            { type: 'bug' as const, icon: <Bug size={16} />, label: 'Bug Report' },
+            { type: 'feature' as const, icon: <Lightbulb size={16} />, label: 'Saran Fitur' },
+            { type: 'general' as const, icon: <HelpCircle size={16} />, label: 'Umum' },
+          ].map((item) => (
             <button
-              onClick={handleSubmitFeedback}
-              disabled={!feedbackMessage.trim() || feedbackSending}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50"
-              style={{ 
-                backgroundColor: colors.accent,
-                color: 'white',
+              key={item.type}
+              onClick={() => setFeedbackType(item.type)}
+              className="btn-micro flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+              style={{
+                backgroundColor: feedbackType === item.type ? colors.accent : colors.bgTertiary,
+                color: feedbackType === item.type ? 'white' : colors.textSecondary,
               }}
             >
-              {feedbackSending ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Mengirim...
-                </>
-              ) : (
-                <>
-                  <Send size={18} />
-                  Kirim Feedback
-                </>
-              )}
+              {item.icon}
+              {item.label}
             </button>
-          </>
-        )}
+          ))}
+        </div>
+
+        {/* Message */}
+        <textarea
+          value={feedbackMessage}
+          onChange={(e) => setFeedbackMessage(e.target.value)}
+          placeholder={
+            feedbackType === 'bug' 
+              ? 'Jelaskan bug yang kamu temukan...' 
+              : feedbackType === 'feature'
+              ? 'Fitur apa yang kamu inginkan?'
+              : 'Tulis pesan atau pertanyaan...'
+          }
+          className="w-full p-3 rounded-lg text-sm resize-none"
+          style={{ 
+            backgroundColor: colors.bgTertiary, 
+            color: colors.textPrimary,
+            border: `1px solid ${colors.border}`,
+          }}
+          rows={4}
+        />
+
+        {/* Email (optional) */}
+        <input
+          type="email"
+          value={feedbackEmail}
+          onChange={(e) => setFeedbackEmail(e.target.value)}
+          placeholder="Email (opsional, untuk balasan)"
+          className="w-full p-3 rounded-lg text-sm"
+          style={{ 
+            backgroundColor: colors.bgTertiary, 
+            color: colors.textPrimary,
+            border: `1px solid ${colors.border}`,
+          }}
+        />
+
+        {/* Submit */}
+        <button
+          onClick={handleSubmitFeedback}
+          disabled={feedbackSending}
+          className="btn-micro btn-ripple w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium disabled:opacity-50"
+          style={{ 
+            backgroundColor: colors.accent,
+            color: 'white',
+          }}
+        >
+          {feedbackSending ? (
+            <>
+              <div className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />
+              Mengirim...
+            </>
+          ) : (
+            <>
+              <Send size={18} />
+              Kirim Feedback
+            </>
+          )}
+        </button>
 
         <p className="text-xs text-center" style={{ color: colors.textMuted }}>
           Feedback akan dikirim ke admin untuk ditinjau.

@@ -78,19 +78,19 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
         <div className="flex gap-2">
           <button 
             onClick={() => setFilter(FilterType.ALL)}
-            className={`px-3 py-1 rounded text-sm ${filter === FilterType.ALL ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+            className={`btn-micro px-3 py-1 rounded text-sm ${filter === FilterType.ALL ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
           >
             Semua
           </button>
           <button 
             onClick={() => setFilter(FilterType.SPAM_ONLY)}
-            className={`px-3 py-1 rounded text-sm ${filter === FilterType.SPAM_ONLY ? 'bg-red-900/50 text-red-200 border border-red-900' : 'text-gray-400 hover:text-white'}`}
+            className={`btn-micro px-3 py-1 rounded text-sm ${filter === FilterType.SPAM_ONLY ? 'bg-red-900/50 text-red-200 border border-red-900' : 'text-gray-400 hover:text-white'}`}
           >
             Menunggu
           </button>
           <button 
             onClick={() => setFilter(FilterType.CLEAN_ONLY)}
-            className={`px-3 py-1 rounded text-sm ${filter === FilterType.CLEAN_ONLY ? 'bg-emerald-900/50 text-emerald-200 border border-emerald-900' : 'text-gray-400 hover:text-white'}`}
+            className={`btn-micro px-3 py-1 rounded text-sm ${filter === FilterType.CLEAN_ONLY ? 'bg-emerald-900/50 text-emerald-200 border border-emerald-900' : 'text-gray-400 hover:text-white'}`}
           >
             Ditindak
           </button>
@@ -167,21 +167,21 @@ const ModerationLog: React.FC<ModerationLogProps> = ({ entries, onDelete, onTime
                 <button 
                   onClick={() => onDelete(entry.id, entry)}
                   title="Hapus Pesan"
-                  className="p-1.5 rounded bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white transition-colors"
+                  className="btn-micro p-1.5 rounded bg-gray-800 hover:bg-red-600 text-gray-400 hover:text-white btn-danger"
                 >
                   <Trash2 size={14} />
                 </button>
                 <button 
                   onClick={() => onTimeout(entry.userId, entry)}
                   title="Timeout User (5 menit)"
-                  className="p-1.5 rounded bg-gray-800 hover:bg-amber-600 text-gray-400 hover:text-white transition-colors"
+                  className="btn-micro p-1.5 rounded bg-gray-800 hover:bg-amber-600 text-gray-400 hover:text-white"
                 >
                   <Clock size={14} />
                 </button>
                 <button 
                   onClick={() => onBan(entry.userId, entry)}
                   title="Ban User"
-                  className="p-1.5 rounded bg-gray-800 hover:bg-purple-600 text-gray-400 hover:text-white transition-colors"
+                  className="btn-micro p-1.5 rounded bg-gray-800 hover:bg-purple-600 text-gray-400 hover:text-white"
                 >
                   <Ban size={14} />
                 </button>

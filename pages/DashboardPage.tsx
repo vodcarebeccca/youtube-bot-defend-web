@@ -1,8 +1,9 @@
 /**
  * Dashboard Page - Overview stats dan quick actions
  */
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
 import { 
   MessageSquare, 
   ShieldAlert, 
@@ -13,6 +14,35 @@ import {
   Play,
   ExternalLink,
 } from 'lucide-react';
+
+// Animated counter hook
+const useAnimatedCounter = (value: number, duration = 800) => {
+  const [displayValue, setDisplayValue] = useState(0);
+  const prevValue = useRef(0);
+
+  useEffect(() => {
+    const startValue = prevValue.current;
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(startValue + (value - startValue) * easeOut);
+      setDisplayValue(current);
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      } else {
+        prevValue.current = value;
+      }
+    };
+
+    requestAnimationFrame(animate);
+  }, [value, duration]);
+
+  return displayValue;
+};
 
 interface DashboardPageProps {
   stats: {
@@ -38,7 +68,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
 }) => {
   const { colors } = useTheme();
 
-  // Stat card component
+  const toast = useToast();
+
+  // Animated Stat card component
   const StatCard = ({ 
     icon, 
     value, 
@@ -51,33 +83,37 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
     label: string; 
     color: string;
     trend?: { value: number; up: boolean };
-  }) => (
-    <div 
-      className="p-5 rounded-xl transition-all duration-200 hover:scale-[1.02]"
-      style={{ backgroundColor: colors.bgCard }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div 
-          className="p-2.5 rounded-lg"
-          style={{ backgroundColor: `${color}20` }}
-        >
-          <span style={{ color }}>{icon}</span>
-        </div>
-        {trend && (
-          <div className={`flex items-center gap-1 text-sm ${trend.up ? 'text-green-400' : 'text-red-400'}`}>
-            {trend.up ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-            <span>{trend.value}%</span>
+  }) => {
+    const animatedValue = useAnimatedCounter(value);
+    
+    return (
+      <div 
+        className="stat-card-animated p-5 rounded-xl cursor-default"
+        style={{ backgroundColor: colors.bgCard }}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div 
+            className="p-2.5 rounded-lg"
+            style={{ backgroundColor: `${color}20` }}
+          >
+            <span style={{ color }}>{icon}</span>
           </div>
-        )}
+          {trend && (
+            <div className={`flex items-center gap-1 text-sm ${trend.up ? 'text-green-400' : 'text-red-400'}`}>
+              {trend.up ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              <span>{trend.value}%</span>
+            </div>
+          )}
+        </div>
+        <div className="text-3xl font-bold mb-1 counter-animated" style={{ color }}>
+          {animatedValue.toLocaleString()}
+        </div>
+        <div className="text-sm" style={{ color: colors.textMuted }}>
+          {label}
+        </div>
       </div>
-      <div className="text-3xl font-bold mb-1" style={{ color }}>
-        {value.toLocaleString()}
-      </div>
-      <div className="text-sm" style={{ color: colors.textMuted }}>
-        {label}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -119,15 +155,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
             }}
           />
           <button
-            onClick={onStartMonitoring}
+            onClick={() => {
+              onStartMonitoring();
+              if (!isMonitoring && botCount > 0) {
+                toast.info('Memulai monitoring...');
+              } else if (isMonitoring) {
+                toast.warning('Monitoring dihentikan');
+              }
+            }}
             disabled={botCount === 0}
             className={`
-              px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all
+              btn-micro btn-ripple px-6 py-3 rounded-lg font-semibold flex items-center gap-2
               ${botCount === 0 
                 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
                 : isMonitoring
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'text-white hover:opacity-90'
+                  ? 'bg-red-500 text-white btn-danger'
+                  : 'text-white btn-success'
               }
             `}
             style={{ 

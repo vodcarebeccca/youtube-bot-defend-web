@@ -76,7 +76,10 @@ const AdminApp: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full" />
+        <div className="text-center">
+          <div className="spinner mx-auto mb-4" style={{ width: 32, height: 32 }} />
+          <p className="text-gray-400">Loading Admin Panel...</p>
+        </div>
       </div>
     );
   }
@@ -109,7 +112,7 @@ const AdminApp: React.FC = () => {
             
             <button
               onClick={handleLogin}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium"
+              className="btn-micro btn-ripple w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-lg font-medium btn-success"
             >
               Login
             </button>
@@ -159,7 +162,7 @@ const AdminApp: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left transition-colors ${
+                className={`btn-micro w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${
                   activeTab === tab.id
                     ? 'bg-emerald-600 text-white'
                     : 'text-gray-400 hover:bg-gray-700 hover:text-white'
@@ -224,7 +227,7 @@ const DashboardTab: React.FC = () => {
         <h2 className="text-2xl font-bold">Dashboard</h2>
         <button 
           onClick={loadStats}
-          className="flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+          className="btn-micro flex items-center gap-2 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
         >
           <RefreshCw size={16} /> Refresh
         </button>
@@ -367,11 +370,11 @@ const StatCard: React.FC<{ title: string; value: number; icon: React.ReactNode; 
   };
 
   return (
-    <div className={`rounded-xl p-6 border ${colorClasses[color] || colorClasses.blue}`}>
+    <div className={`stat-card-animated rounded-xl p-6 border cursor-default ${colorClasses[color] || colorClasses.blue}`}>
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm opacity-80">{title}</p>
-          <p className="text-3xl font-bold mt-1">{value.toLocaleString()}</p>
+          <p className="text-3xl font-bold mt-1 counter-animated">{value.toLocaleString()}</p>
         </div>
         <div className="opacity-50">{icon}</div>
       </div>

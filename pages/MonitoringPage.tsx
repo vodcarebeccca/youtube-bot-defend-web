@@ -132,12 +132,12 @@ const MonitoringPage: React.FC<MonitoringPageProps> = ({
             onClick={isMonitoring ? onStopMonitoring : onStartMonitoring}
             disabled={botCount === 0}
             className={`
-              px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all
+              btn-micro btn-ripple px-6 py-3 rounded-lg font-semibold flex items-center gap-2
               ${botCount === 0 
                 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' 
                 : isMonitoring
-                  ? 'bg-red-500 hover:bg-red-600 text-white'
-                  : 'text-white hover:opacity-90'
+                  ? 'bg-red-500 text-white btn-danger'
+                  : 'text-white btn-success'
               }
             `}
             style={{ 

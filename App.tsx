@@ -5,6 +5,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { ToastProvider } from './contexts/ToastContext';
 import Layout from './components/layout/Layout';
 
 // Pages
@@ -49,6 +50,7 @@ import {
 import { detectJudol } from './services/spamDetection';
 import { detectSpamWithAI, isAIDetectionAvailable } from './services/aiDetection';
 import { ChatMessage, DashboardStats, FilterType, AppSettings, ModerationEntry } from './types';
+import { useToast } from './contexts/ToastContext';
 
 // Sound notification
 const playNotificationSound = () => {
@@ -68,6 +70,8 @@ const playNotificationSound = () => {
 };
 
 const AppContent: React.FC = () => {
+  const toast = useToast();
+  
   // App State
   const [videoUrl, setVideoUrl] = useState('');
   const [isMonitoring, setIsMonitoring] = useState(false);
@@ -306,9 +310,10 @@ const AppContent: React.FC = () => {
     } catch (err: any) {
       console.error("Polling error", err);
       setErrorMsg(err.message || "Gagal mengambil pesan");
+      toast.error(err.message || "Gagal mengambil pesan");
       stopMonitoring();
     }
-  }, [liveChatId, nextPageToken, settings, stats.spamDetected, modStatus]);
+  }, [liveChatId, nextPageToken, settings, stats.spamDetected, modStatus, toast]);
 
   // Polling interval
   useEffect(() => {
@@ -329,9 +334,11 @@ const AppContent: React.FC = () => {
     const videoId = extractVideoId(videoUrl);
     if (!videoId) {
       setErrorMsg("URL YouTube tidak valid");
+      toast.error("URL YouTube tidak valid");
       return;
     }
     try {
+      toast.info("Menghubungkan ke live chat...");
       const chatId = await getLiveChatId(videoId);
       setLiveChatId(chatId);
       
@@ -344,12 +351,15 @@ const AppContent: React.FC = () => {
       setStats({ totalChat: 0, spamDetected: 0, actionsTaken: 0, quotaUsed: 0 });
       trackSessionStart();
       
+      toast.success("Monitoring aktif! 🛡️");
+      
       // Track user activity for admin dashboard
       if (status?.channelId) {
         trackUserActivity(status.channelId, status.botName || '');
       }
     } catch (err: any) {
       setErrorMsg(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -360,6 +370,7 @@ const AppContent: React.FC = () => {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
+    toast.warning("Monitoring dihentikan");
   };
 
   const handleAction = async (action: 'delete' | 'ban' | 'timeout', idOrUserId: string, entry?: ModerationEntry) => {
@@ -369,6 +380,7 @@ const AppContent: React.FC = () => {
         setModerationLog(prev => prev.map(e => 
           e.id === idOrUserId ? { ...e, type: 'deleted', actionTaken: true } : e
         ));
+        toast.success('Pesan berhasil dihapus');
       } else if (action === 'ban' && liveChatId) {
         await banUser(liveChatId, idOrUserId, true);
         if (entry) {
@@ -376,6 +388,7 @@ const AppContent: React.FC = () => {
             e.userId === idOrUserId ? { ...e, type: 'banned', actionTaken: true } : e
           ));
         }
+        toast.success(`User ${entry?.username || ''} di-ban permanen`);
       } else if (action === 'timeout' && liveChatId) {
         await banUser(liveChatId, idOrUserId, false);
         if (entry) {
@@ -383,12 +396,13 @@ const AppContent: React.FC = () => {
             e.userId === idOrUserId ? { ...e, type: 'timeout', actionTaken: true } : e
           ));
         }
+        toast.warning(`User ${entry?.username || ''} di-timeout 5 menit`);
       }
       setStats(prev => ({ ...prev, actionsTaken: prev.actionsTaken + 1, quotaUsed: prev.quotaUsed + 1 }));
       trackApiCall(1);
       recordAction();
     } catch (err: any) {
-      alert(`Aksi gagal: ${err.message}`);
+      toast.error(`Aksi gagal: ${err.message}`);
     }
   };
 
@@ -414,8 +428,11 @@ const AppContent: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0f0f0f]">
         <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-emerald-400 border-t-transparent rounded-full mx-auto mb-4" />
+          <div className="spinner mx-auto mb-4" style={{ width: 32, height: 32 }} />
           <p className="text-gray-400">Loading...</p>
+          <div className="dots-loading justify-center mt-3">
+            <span /><span /><span />
+          </div>
         </div>
       </div>
     );
@@ -482,7 +499,9 @@ const App: React.FC = () => {
   return (
     <BrowserRouter>
       <ThemeProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </ThemeProvider>
     </BrowserRouter>
   );
