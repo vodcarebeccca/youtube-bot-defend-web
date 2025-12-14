@@ -405,19 +405,9 @@ const BlacklistTab: React.FC = () => (
 
 const BroadcastsTab: React.FC = () => <BroadcastsTabComponent />;
 
-const ReportsTab: React.FC = () => (
-  <div>
-    <h2 className="text-2xl font-bold mb-6">Spam Reports</h2>
-    <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-      <p className="text-gray-400 mb-4">
-        Review laporan spam dari users (false positive/negative).
-      </p>
-      <p className="text-sm text-gray-500">
-        Collection: <code className="bg-gray-700 px-2 py-1 rounded">webapp_reports</code>
-      </p>
-    </div>
-  </div>
-);
+import ReportsTabComponent from './tabs/ReportsTab';
+
+const ReportsTab: React.FC = () => <ReportsTabComponent />;
 
 const LicensesTab: React.FC = () => (
   <div>

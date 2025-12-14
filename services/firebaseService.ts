@@ -300,6 +300,47 @@ export async function submitSpamReport(
   }
 }
 
+// ==================== FEEDBACK ====================
+
+/**
+ * Submit user feedback to Firebase
+ */
+export async function submitFeedback(
+  feedbackType: 'bug' | 'feature' | 'general',
+  message: string,
+  email: string = ''
+): Promise<boolean> {
+  try {
+    const feedbackId = `fb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const url = `${BASE_URL}/webapp_feedback/${feedbackId}?key=${FIREBASE_CONFIG.apiKey}`;
+
+    const data = {
+      type: feedbackType,
+      message: message.slice(0, 1000),
+      email: email.slice(0, 100),
+      source: 'web_app',
+      status: 'pending',
+      user_agent: navigator.userAgent.substring(0, 200),
+      created_at: new Date().toISOString(),
+    };
+
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: dictToFirestore(data) }),
+    });
+
+    if (response.ok) {
+      console.log('[Firebase] Feedback submitted');
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.error('[Firebase] Submit feedback error:', e);
+    return false;
+  }
+}
+
 // ==================== REMOTE CONFIG ====================
 
 export interface RemoteConfig {
