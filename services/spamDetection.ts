@@ -199,19 +199,246 @@ function detectSpacedSpam(text: string): { isSpam: boolean; word: string; score:
   return { isSpam: false, word: '', score: 0 };
 }
 
-// ==================== CONTACT INFO DETECTION ====================
+// ==================== #46 PHONE NUMBER DETECTOR ====================
+interface PhoneDetectionResult {
+  hasPhone: boolean;
+  numbers: string[];
+  score: number;
+}
+
+function detectPhoneNumbers(text: string): PhoneDetectionResult {
+  const numbers: string[] = [];
+  let score = 0;
+  
+  // Normalize text - remove spaces, dots, dashes between digits
+  const normalized = text.replace(/[\s.\-()]+/g, '');
+  
+  // Indonesian phone patterns
+  const patterns = [
+    // +62 format (WhatsApp international)
+    /\+62[0-9]{9,12}/g,
+    // 62 without plus
+    /(?<!\d)62[0-9]{9,12}(?!\d)/g,
+    // 08xx format (local)
+    /(?<!\d)08[0-9]{8,11}(?!\d)/g,
+    // wa.me links
+    /wa\.me\/[0-9+]+/gi,
+    // WhatsApp text patterns
+    /(?:wa|whatsapp|whatsap|whatshap)[\s:]*[0-9+]{10,15}/gi,
+    // Telegram patterns
+    /(?:t\.me|telegram|tele)[\s:\/]*[a-zA-Z0-9_]+/gi,
+  ];
+  
+  for (const pattern of patterns) {
+    const matches = normalized.match(pattern) || text.match(pattern);
+    if (matches) {
+      numbers.push(...matches);
+      score += 40; // Each phone number adds score
+    }
+  }
+  
+  // Detect obfuscated phone numbers: 0 8 1 2 3 4 5 6 7 8 9
+  const spacedDigits = text.match(/(?:0\s*8|6\s*2)[\s\d]{15,}/g);
+  if (spacedDigits) {
+    const cleaned = spacedDigits[0].replace(/\s/g, '');
+    if (cleaned.length >= 10 && cleaned.length <= 15) {
+      numbers.push(`obfuscated:${cleaned}`);
+      score += 50; // Obfuscated = more suspicious
+    }
+  }
+  
+  // Detect "hubungi" + number pattern
+  const contactPattern = /(?:hubungi|kontak|chat|dm|pm)[\s:]*(?:\+?62|08)[0-9\s]{8,}/gi;
+  const contactMatches = text.match(contactPattern);
+  if (contactMatches) {
+    numbers.push(...contactMatches);
+    score += 60;
+  }
+  
+  return {
+    hasPhone: numbers.length > 0,
+    numbers: [...new Set(numbers)], // Remove duplicates
+    score: Math.min(score, 80)
+  };
+}
+
+// ==================== #47 LINK SHORTENER DETECTOR ====================
+interface LinkDetectionResult {
+  hasShortener: boolean;
+  links: string[];
+  score: number;
+}
+
+function detectLinkShorteners(text: string): LinkDetectionResult {
+  const links: string[] = [];
+  let score = 0;
+  
+  // Common link shorteners used by spammers
+  const shortenerPatterns = [
+    // International shorteners
+    /bit\.ly\/[a-zA-Z0-9]+/gi,
+    /tinyurl\.com\/[a-zA-Z0-9]+/gi,
+    /goo\.gl\/[a-zA-Z0-9]+/gi,
+    /t\.co\/[a-zA-Z0-9]+/gi,
+    /ow\.ly\/[a-zA-Z0-9]+/gi,
+    /is\.gd\/[a-zA-Z0-9]+/gi,
+    /v\.gd\/[a-zA-Z0-9]+/gi,
+    /buff\.ly\/[a-zA-Z0-9]+/gi,
+    /adf\.ly\/[a-zA-Z0-9]+/gi,
+    /bc\.vc\/[a-zA-Z0-9]+/gi,
+    /j\.mp\/[a-zA-Z0-9]+/gi,
+    
+    // Indonesian shorteners
+    /s\.id\/[a-zA-Z0-9]+/gi,
+    /klik\.gg\/[a-zA-Z0-9]+/gi,
+    /link\.id\/[a-zA-Z0-9]+/gi,
+    
+    // Social/Bio links (often used for gambling)
+    /linktr\.ee\/[a-zA-Z0-9_]+/gi,
+    /linkin\.bio\/[a-zA-Z0-9_]+/gi,
+    /bio\.link\/[a-zA-Z0-9_]+/gi,
+    /heylink\.me\/[a-zA-Z0-9_]+/gi,
+    /lynk\.id\/[a-zA-Z0-9_]+/gi,
+    /msha\.ke\/[a-zA-Z0-9_]+/gi,
+    /lnk\.to\/[a-zA-Z0-9]+/gi,
+    /snip\.ly\/[a-zA-Z0-9]+/gi,
+    
+    // Telegram links
+    /t\.me\/[a-zA-Z0-9_]+/gi,
+    /telegram\.me\/[a-zA-Z0-9_]+/gi,
+    
+    // WhatsApp links
+    /wa\.me\/[0-9+]+/gi,
+    /chat\.whatsapp\.com\/[a-zA-Z0-9]+/gi,
+    /api\.whatsapp\.com\/send\?[^\s]+/gi,
+  ];
+  
+  for (const pattern of shortenerPatterns) {
+    const matches = text.match(pattern);
+    if (matches) {
+      links.push(...matches);
+      score += 35; // Each shortener link adds score
+    }
+  }
+  
+  // Detect suspicious domain patterns (gambling sites often use these)
+  const suspiciousDomains = [
+    /[a-z]+slot[0-9]*\.[a-z]+/gi,
+    /[a-z]+gacor[0-9]*\.[a-z]+/gi,
+    /[a-z]+(88|77|99|777|888)\.[a-z]+/gi,
+    /slot[a-z]+\.[a-z]+/gi,
+    /gacor[a-z]+\.[a-z]+/gi,
+    /maxwin[a-z]*\.[a-z]+/gi,
+    /jp[a-z0-9]+\.[a-z]+/gi,
+  ];
+  
+  for (const pattern of suspiciousDomains) {
+    const matches = text.match(pattern);
+    if (matches) {
+      links.push(...matches.map(m => `suspicious:${m}`));
+      score += 50; // Suspicious gambling domain
+    }
+  }
+  
+  return {
+    hasShortener: links.length > 0,
+    links: [...new Set(links)],
+    score: Math.min(score, 80)
+  };
+}
+
+// ==================== #48 UNICODE BYPASS DETECTOR ====================
+interface UnicodeDetectionResult {
+  hasUnicodeBypass: boolean;
+  originalText: string;
+  normalizedText: string;
+  unicodeChars: string[];
+  score: number;
+}
+
+function detectUnicodeBypass(text: string): UnicodeDetectionResult {
+  const unicodeChars: string[] = [];
+  let score = 0;
+  
+  // Count unicode characters used for bypass
+  for (const char of text) {
+    if (UNICODE_MAP[char]) {
+      unicodeChars.push(char);
+    }
+  }
+  
+  const unicodeCount = unicodeChars.length;
+  const textLength = text.length;
+  const unicodeRatio = textLength > 0 ? unicodeCount / textLength : 0;
+  
+  // Normalize the text
+  const normalized = normalizeLeet(text);
+  
+  // Check if normalized text contains spam keywords
+  let containsSpamKeyword = false;
+  for (const kw of JUDOL_KEYWORDS.slice(0, 50)) { // Check top 50 keywords
+    if (normalized.includes(kw.replace(/\s/g, ''))) {
+      containsSpamKeyword = true;
+      break;
+    }
+  }
+  
+  // Scoring logic
+  if (unicodeCount >= 3 && containsSpamKeyword) {
+    // Unicode + spam keyword = highly suspicious
+    score = 70;
+  } else if (unicodeCount >= 5 && unicodeRatio > 0.3) {
+    // Many unicode chars (>30% of text) = suspicious
+    score = 50;
+  } else if (unicodeCount >= 10) {
+    // Very many unicode chars = suspicious
+    score = 40;
+  } else if (unicodeCount >= 3 && unicodeRatio > 0.2) {
+    // Some unicode with high ratio
+    score = 30;
+  }
+  
+  // Check for specific bypass patterns
+  const bypassPatterns = [
+    /[ꜱѕ][lℓ][oоσ][tт]/i,  // slot with unicode
+    /[gɢ][aаα][cс][oоσ][rг]/i, // gacor with unicode
+    /[mм][aаα][xх][wω][iі][nп]/i, // maxwin with unicode
+    /[jј][pр]/i, // jp with unicode
+    /[bв][oоσ][nп][uυ][sѕ]/i, // bonus with unicode
+  ];
+  
+  for (const pattern of bypassPatterns) {
+    if (pattern.test(text)) {
+      score = Math.max(score, 75);
+      break;
+    }
+  }
+  
+  return {
+    hasUnicodeBypass: score >= 30,
+    originalText: text,
+    normalizedText: normalized,
+    unicodeChars: [...new Set(unicodeChars)],
+    score
+  };
+}
+
+// ==================== CONTACT INFO DETECTION (Enhanced) ====================
 function hasContactInfo(text: string): boolean {
+  const phoneResult = detectPhoneNumbers(text);
+  const linkResult = detectLinkShorteners(text);
+  
+  if (phoneResult.hasPhone || linkResult.hasShortener) {
+    return true;
+  }
+  
+  // Additional patterns
   const patterns = [
     /https?:\/\/[^\s]+/i,
     /www\.[^\s]+/i,
-    /bit\.ly\/[^\s]+/i,
-    /t\.me\/[^\s]+/i,
-    /wa\.me\/[^\s]+/i,
-    /linktr\.ee\/[^\s]+/i,
-    /\+62[0-9]{9,12}/,
-    /08[0-9]{8,11}/,
     /cek\s*bio/i,
     /link\s*di\s*bio/i,
+    /dm\s*(aja|saja|ya)/i,
     /[a-zA-Z]{3,}(666|777|888|88|99)\b/i,
   ];
   
@@ -303,6 +530,29 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
     return { isSpam: false, keywords: [], score: 0 };
   }
   
+  // ==================== #46 PHONE NUMBER DETECTION ====================
+  const phoneResult = detectPhoneNumbers(text);
+  if (phoneResult.hasPhone) {
+    score += phoneResult.score;
+    keywordsFound.push(`phone:${phoneResult.numbers[0]}`);
+  }
+  
+  // ==================== #47 LINK SHORTENER DETECTION ====================
+  const linkResult = detectLinkShorteners(text);
+  if (linkResult.hasShortener) {
+    score += linkResult.score;
+    keywordsFound.push(`link:${linkResult.links[0]}`);
+  }
+  
+  // ==================== #48 UNICODE BYPASS DETECTION ====================
+  const unicodeResult = detectUnicodeBypass(text);
+  if (unicodeResult.hasUnicodeBypass) {
+    score += unicodeResult.score;
+    if (unicodeResult.unicodeChars.length > 0) {
+      keywordsFound.push(`unicode:${unicodeResult.unicodeChars.slice(0, 3).join('')}`);
+    }
+  }
+  
   // Check spaced unicode spam
   const spaced = detectSpacedSpam(text);
   if (spaced.isSpam) {
@@ -312,27 +562,30 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
   // Check judol link pattern (zeus666, garuda777, etc)
   const judolLink = detectJudolLinkPattern(text);
   if (judolLink.isJudol) {
-    return { isSpam: true, keywords: [`site:${judolLink.name}`], score: 85 };
+    keywordsFound.push(`site:${judolLink.name}`);
+    score += 85;
   }
-  
-  // Check contact info
-  const hasContact = hasContactInfo(text);
   
   // Check keywords
   for (const kw of JUDOL_KEYWORDS) {
     const kwNorm = kw.replace(/\s/g, '');
     if (normalized.includes(kwNorm) || normalizedLeet.includes(kwNorm)) {
-      keywordsFound.push(kw);
+      if (!keywordsFound.includes(kw)) {
+        keywordsFound.push(kw);
+      }
     }
   }
   
-  // SPAM = keyword + contact
+  // SPAM = keyword + contact (phone or link)
+  const hasContact = phoneResult.hasPhone || linkResult.hasShortener || hasContactInfo(text);
   if (keywordsFound.length > 0 && hasContact) {
-    score += 70;
+    score += 40;
   }
   
   // Multiple keywords = higher score
-  if (keywordsFound.length >= 3) {
+  if (keywordsFound.length >= 4) {
+    score += 40;
+  } else if (keywordsFound.length >= 3) {
     score += 30;
   } else if (keywordsFound.length >= 2) {
     score += 15;
@@ -340,8 +593,10 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
   
   // Site name pattern: zeus666, garuda777, slot88
   if (/[a-zA-Z]{3,}(666|777|888|88|99|123)\b/i.test(normalizedLeet)) {
-    score += 80;
-    keywordsFound.push('site_pattern');
+    if (!keywordsFound.includes('site_pattern')) {
+      score += 60;
+      keywordsFound.push('site_pattern');
+    }
   }
   
   // Promo phrases
@@ -355,16 +610,12 @@ export function detectJudol(text: string, customSpamWords: string[] = []): SpamR
     keywordsFound.push('promo_phrase');
   }
   
-  // Unicode bypass detection (many fancy letters = suspicious)
-  const unicodeCount = [...text].filter(c => UNICODE_MAP[c]).length;
-  if (unicodeCount >= 10 && keywordsFound.length > 0) {
-    score += 30;
-    keywordsFound.push('unicode_bypass');
-  }
-  
   return {
     isSpam: score >= 50,
     score: Math.min(score, 100),
     keywords: keywordsFound.slice(0, 5)
   };
 }
+
+// Export individual detectors for testing/debugging
+export { detectPhoneNumbers, detectLinkShorteners, detectUnicodeBypass };
