@@ -2,18 +2,166 @@
  * Bot Service - Menggunakan pre-authorized bot tokens
  * Bot harus sudah jadi moderator di channel target
  * Supports loading from Firebase cloud or local constants
+ * 
+ * Multi-Project Quota Rotation:
+ * - Supports multiple API keys from different Google Cloud projects
+ * - Each project has 10,000 quota/day
+ * - Auto-switches to next key when quota error (403) detected
+ * - Tracks quota usage per key
  */
 
-import { BOT_TOKENS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, API_KEYS } from '../constants';
+import { BOT_TOKENS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, API_KEYS, QUOTA_PER_PROJECT, QUOTA_COSTS } from '../constants';
 import { ChatMessage } from '../types';
 import { getCloudBots, parseTokenData } from './firebaseService';
 
-// API Key rotation for fallback
+// ============================================
+// MULTI-PROJECT QUOTA ROTATION SYSTEM
+// ============================================
+
+interface ApiKeyStatus {
+  key: string;
+  projectIndex: number;
+  quotaUsed: number;
+  quotaExhausted: boolean;
+  exhaustedAt?: number;
+  lastUsed?: number;
+}
+
+// Track all API keys and their quota status
+let apiKeyStatuses: ApiKeyStatus[] = [];
 let currentApiKeyIndex = 0;
+
+// Initialize API key statuses
+function initApiKeyStatuses(): void {
+  if (apiKeyStatuses.length === 0 && API_KEYS.length > 0) {
+    apiKeyStatuses = API_KEYS.map((key, index) => ({
+      key,
+      projectIndex: index + 1,
+      quotaUsed: 0,
+      quotaExhausted: false,
+    }));
+    console.log(`[QuotaManager] Initialized ${apiKeyStatuses.length} API keys (${apiKeyStatuses.length * QUOTA_PER_PROJECT} total quota/day)`);
+  }
+}
+
+// Get next available API key (skips exhausted keys)
 function getApiKey(): string {
-  const key = API_KEYS[currentApiKeyIndex];
-  currentApiKeyIndex = (currentApiKeyIndex + 1) % API_KEYS.length;
-  return key;
+  initApiKeyStatuses();
+  
+  if (apiKeyStatuses.length === 0) {
+    console.error('[QuotaManager] No API keys configured!');
+    return '';
+  }
+  
+  // Find next non-exhausted key
+  const startIndex = currentApiKeyIndex;
+  let attempts = 0;
+  
+  while (attempts < apiKeyStatuses.length) {
+    const status = apiKeyStatuses[currentApiKeyIndex];
+    
+    // Check if exhausted key has reset (after midnight PT)
+    if (status.quotaExhausted && status.exhaustedAt) {
+      const now = Date.now();
+      const exhaustedDate = new Date(status.exhaustedAt);
+      const nowDate = new Date(now);
+      
+      // Reset if it's a new day (Pacific Time - YouTube quota resets at midnight PT)
+      if (nowDate.toDateString() !== exhaustedDate.toDateString()) {
+        status.quotaExhausted = false;
+        status.quotaUsed = 0;
+        status.exhaustedAt = undefined;
+        console.log(`[QuotaManager] Project ${status.projectIndex} quota reset (new day)`);
+      }
+    }
+    
+    if (!status.quotaExhausted) {
+      const key = status.key;
+      status.lastUsed = Date.now();
+      // Rotate to next for next call
+      currentApiKeyIndex = (currentApiKeyIndex + 1) % apiKeyStatuses.length;
+      return key;
+    }
+    
+    currentApiKeyIndex = (currentApiKeyIndex + 1) % apiKeyStatuses.length;
+    attempts++;
+  }
+  
+  // All keys exhausted
+  console.error('[QuotaManager] ❌ All API keys exhausted! Quota limit reached.');
+  throw new Error('Semua quota API habis! Coba lagi besok atau tambah project baru.');
+}
+
+// Mark API key as exhausted (called when 403 quota error received)
+function markKeyExhausted(key: string): void {
+  const status = apiKeyStatuses.find(s => s.key === key);
+  if (status) {
+    status.quotaExhausted = true;
+    status.exhaustedAt = Date.now();
+    console.log(`[QuotaManager] ⚠️ Project ${status.projectIndex} quota exhausted`);
+  }
+}
+
+// Track quota usage
+function trackQuotaUsage(key: string, cost: number): void {
+  const status = apiKeyStatuses.find(s => s.key === key);
+  if (status) {
+    status.quotaUsed += cost;
+    // Auto-mark as exhausted if estimated quota exceeded
+    if (status.quotaUsed >= QUOTA_PER_PROJECT) {
+      status.quotaExhausted = true;
+      status.exhaustedAt = Date.now();
+      console.log(`[QuotaManager] Project ${status.projectIndex} estimated quota reached (${status.quotaUsed}/${QUOTA_PER_PROJECT})`);
+    }
+  }
+}
+
+// Get quota status for UI display
+export function getQuotaStatus(): {
+  totalProjects: number;
+  activeProjects: number;
+  exhaustedProjects: number;
+  totalQuota: number;
+  estimatedUsed: number;
+  estimatedRemaining: number;
+  keys: Array<{
+    projectIndex: number;
+    quotaUsed: number;
+    quotaExhausted: boolean;
+    keyPreview: string;
+  }>;
+} {
+  initApiKeyStatuses();
+  
+  const activeProjects = apiKeyStatuses.filter(s => !s.quotaExhausted).length;
+  const exhaustedProjects = apiKeyStatuses.filter(s => s.quotaExhausted).length;
+  const totalQuota = apiKeyStatuses.length * QUOTA_PER_PROJECT;
+  const estimatedUsed = apiKeyStatuses.reduce((sum, s) => sum + s.quotaUsed, 0);
+  
+  return {
+    totalProjects: apiKeyStatuses.length,
+    activeProjects,
+    exhaustedProjects,
+    totalQuota,
+    estimatedUsed,
+    estimatedRemaining: totalQuota - estimatedUsed,
+    keys: apiKeyStatuses.map(s => ({
+      projectIndex: s.projectIndex,
+      quotaUsed: s.quotaUsed,
+      quotaExhausted: s.quotaExhausted,
+      keyPreview: s.key.substring(0, 10) + '...',
+    })),
+  };
+}
+
+// Reset quota tracking (for testing or manual reset)
+export function resetQuotaTracking(): void {
+  apiKeyStatuses.forEach(s => {
+    s.quotaUsed = 0;
+    s.quotaExhausted = false;
+    s.exhaustedAt = undefined;
+  });
+  console.log('[QuotaManager] Quota tracking reset');
 }
 
 interface BotToken {
@@ -206,7 +354,7 @@ export function extractVideoId(url: string): string | null {
   return null;
 }
 
-// Get Live Chat ID from video
+// Get Live Chat ID from video (with quota rotation)
 export async function getLiveChatId(videoId: string): Promise<string> {
   console.log(`[BotService] Getting live chat ID for video: ${videoId}`);
   
@@ -214,6 +362,7 @@ export async function getLiveChatId(videoId: string): Promise<string> {
   const bot = getNextBot();
   let token = '';
   let useApiKey = false;
+  let apiKey = '';
   
   if (bot) {
     try {
@@ -231,7 +380,8 @@ export async function getLiveChatId(videoId: string): Promise<string> {
   const headers: Record<string, string> = {};
   
   if (useApiKey) {
-    url += `&key=${getApiKey()}`;
+    apiKey = getApiKey();
+    url += `&key=${apiKey}`;
   } else {
     headers['Authorization'] = `Bearer ${token}`;
   }
@@ -241,7 +391,22 @@ export async function getLiveChatId(videoId: string): Promise<string> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     console.error('[BotService] API Error:', errorData);
+    
+    // Handle quota exceeded error - try next API key
+    if (response.status === 403 && errorData.error?.errors?.[0]?.reason === 'quotaExceeded') {
+      if (apiKey) {
+        markKeyExhausted(apiKey);
+        console.log('[BotService] Quota exceeded, retrying with next API key...');
+        return getLiveChatId(videoId); // Recursive retry with next key
+      }
+    }
+    
     throw new Error(errorData.error?.message || 'Failed to fetch video details');
+  }
+  
+  // Track quota usage
+  if (apiKey) {
+    trackQuotaUsage(apiKey, QUOTA_COSTS.videos_list);
   }
   
   const data = await response.json();
@@ -258,7 +423,9 @@ export async function getLiveChatId(videoId: string): Promise<string> {
   return data.items[0].liveStreamingDetails.activeLiveChatId;
 }
 
-// Get chat messages
+// Get chat messages (with quota tracking)
+// Note: This uses OAuth token (bot token), not API key
+// OAuth quota is tied to the project that created the OAuth credentials
 export async function getChatMessages(liveChatId: string, pageToken?: string) {
   const bot = getNextBot();
   if (!bot) throw new Error('No bot available');
@@ -271,8 +438,22 @@ export async function getChatMessages(liveChatId: string, pageToken?: string) {
     headers: { 'Authorization': `Bearer ${token}` }
   });
 
-  if (!response.ok) throw new Error('Failed to fetch chat messages');
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    
+    // Handle quota exceeded
+    if (response.status === 403 && errorData.error?.errors?.[0]?.reason === 'quotaExceeded') {
+      throw new Error('Quota API habis! Monitoring dihentikan. Coba lagi besok atau gunakan project lain.');
+    }
+    
+    throw new Error(errorData.error?.message || 'Failed to fetch chat messages');
+  }
+  
   const data = await response.json();
+  
+  // Track quota usage (5 units per liveChat.messages call)
+  // Note: This is tracked for awareness, actual quota is on OAuth project
+  console.log(`[BotService] Chat poll - estimated quota cost: ${QUOTA_COSTS.liveChat_messages} units`);
   
   const messages: ChatMessage[] = data.items?.map((item: any) => ({
     id: item.id,
@@ -293,6 +474,7 @@ export async function getChatMessages(liveChatId: string, pageToken?: string) {
 }
 
 // Delete message (bot must be moderator)
+// Quota cost: 50 units per delete
 export async function deleteMessage(messageId: string): Promise<boolean> {
   const bot = getNextBot();
   if (!bot) throw new Error('No bot available');
@@ -307,10 +489,17 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
   );
   
   if (response.status === 204) {
-    console.log(`[BotService] Message deleted by ${bot.name}`);
+    console.log(`[BotService] Message deleted by ${bot.name} (quota cost: ${QUOTA_COSTS.liveChat_delete})`);
     return true;
   }
   if (response.status === 403) {
+    const errorData = await response.json().catch(() => ({}));
+    
+    // Check if quota exceeded
+    if (errorData.error?.errors?.[0]?.reason === 'quotaExceeded') {
+      throw new Error('Quota API habis! Tidak bisa delete message. Coba lagi besok.');
+    }
+    
     console.error(`[BotService] ${bot.name} is not moderator!`);
     throw new Error(`Bot "${bot.name}" bukan moderator di channel ini`);
   }
@@ -318,6 +507,7 @@ export async function deleteMessage(messageId: string): Promise<boolean> {
 }
 
 // Ban user (bot must be moderator)
+// Quota cost: 50 units per ban
 export async function banUser(liveChatId: string, userId: string, permanent: boolean = true): Promise<boolean> {
   const bot = getNextBot();
   if (!bot) throw new Error('No bot available');
@@ -345,10 +535,17 @@ export async function banUser(liveChatId: string, userId: string, permanent: boo
   );
   
   if (response.ok) {
-    console.log(`[BotService] User ${permanent ? 'banned' : 'timed out'} by ${bot.name}`);
+    console.log(`[BotService] User ${permanent ? 'banned' : 'timed out'} by ${bot.name} (quota cost: ${QUOTA_COSTS.liveChat_ban})`);
     return true;
   }
   if (response.status === 403) {
+    const errorData = await response.json().catch(() => ({}));
+    
+    // Check if quota exceeded
+    if (errorData.error?.errors?.[0]?.reason === 'quotaExceeded') {
+      throw new Error('Quota API habis! Tidak bisa ban user. Coba lagi besok.');
+    }
+    
     throw new Error(`Bot "${bot.name}" bukan moderator di channel ini`);
   }
   return false;
