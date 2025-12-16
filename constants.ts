@@ -1,7 +1,8 @@
-// Google OAuth Config - dari environment variable atau hardcode untuk development
-// IMPORTANT: Must match Python tools google_oauth_config.json
-export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "573738457758-tjgqgd4dhd0oqtor24b6ciu1vfvv2rdl.apps.googleusercontent.com";
-export const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || "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";
+// Google OAuth Config - dari environment variable
+// Set these in Vercel Environment Variables:
+// VITE_GOOGLE_CLIENT_ID and VITE_GOOGLE_CLIENT_SECRET
+export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+export const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || "";
 
 // Bot Tokens - bisa dari environment variable (JSON string) atau kosong
 // Format: [{"name":"Bot1","access_token":"...","refresh_token":"...","channel_id":"..."}]
