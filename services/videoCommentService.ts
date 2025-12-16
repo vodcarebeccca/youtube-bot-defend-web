@@ -318,10 +318,10 @@ class VideoCommentService {
   }
 
   /**
-   * Delete a comment (only works on user's own channel videos)
-   * Note: YouTube API comments.delete only works for:
-   * - Comments you made on any video
-   * - Comments on YOUR videos (as channel owner)
+   * Delete/Remove a comment from video
+   * Strategy:
+   * 1. Try setModerationStatus with 'rejected' (works for comments on YOUR videos)
+   * 2. Fallback to comments.delete API (works for your own comments anywhere)
    */
   async deleteComment(commentId: string): Promise<boolean> {
     const accessToken = await youtubeOAuth.getAccessToken();
@@ -329,9 +329,32 @@ class VideoCommentService {
       throw new Error('Not logged in');
     }
 
+    console.log(`[VideoCommentService] Attempting to remove comment: ${commentId}`);
+
+    // Method 1: Try setModerationStatus with 'rejected' first
+    // This is the recommended way to remove comments on your own videos
     try {
-      console.log(`[VideoCommentService] Attempting to delete comment: ${commentId}`);
-      
+      const moderationResponse = await fetch(
+        `https://www.googleapis.com/youtube/v3/comments/setModerationStatus?id=${commentId}&moderationStatus=rejected`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+
+      console.log(`[VideoCommentService] Moderation response status: ${moderationResponse.status}`);
+
+      if (moderationResponse.status === 204) {
+        this.stats.commentsDeleted++;
+        console.log(`[VideoCommentService] ✅ Comment rejected/removed via moderation: ${commentId}`);
+        return true;
+      }
+    } catch (modError) {
+      console.log('[VideoCommentService] Moderation method failed, trying delete API...');
+    }
+
+    // Method 2: Fallback to DELETE API
+    try {
       const response = await fetch(
         `https://www.googleapis.com/youtube/v3/comments?id=${commentId}`,
         {
@@ -374,10 +397,13 @@ class VideoCommentService {
         
         errorMessage = message || errorMessage;
       } catch (parseError) {
-        if (parseError instanceof Error && parseError.message.includes('Tidak bisa')) {
+        if (parseError instanceof Error && (
+          parseError.message.includes('Tidak bisa') || 
+          parseError.message.includes('Permission') ||
+          parseError.message.includes('Comment tidak')
+        )) {
           throw parseError;
         }
-        // JSON parse failed, use default error message
       }
 
       throw new Error(errorMessage);
