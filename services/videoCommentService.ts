@@ -245,8 +245,11 @@ class VideoCommentService {
         topComment.spamScore = spamResult.score;
         topComment.spamKeywords = spamResult.keywords;
 
+        // Always add to comments array for display
+        comments.push(topComment);
+        
+        // Only update stats for new comments
         if (!this.processedCommentIds.has(topComment.id)) {
-          comments.push(topComment);
           this.processedCommentIds.add(topComment.id);
           this.stats.totalComments++;
           if (topComment.isSpam) {
@@ -264,8 +267,11 @@ class VideoCommentService {
             replyComment.spamScore = replySpamResult.score;
             replyComment.spamKeywords = replySpamResult.keywords;
 
+            // Always add to comments array for display
+            comments.push(replyComment);
+            
+            // Only update stats for new comments
             if (!this.processedCommentIds.has(replyComment.id)) {
-              comments.push(replyComment);
               this.processedCommentIds.add(replyComment.id);
               this.stats.totalComments++;
               if (replyComment.isSpam) {
