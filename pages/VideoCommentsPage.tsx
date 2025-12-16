@@ -57,6 +57,20 @@ const VideoCommentsPage: React.FC = () => {
     return unsubscribe;
   }, []);
 
+  // Listen for OAuth popup success message
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type === 'oauth_success') {
+        // Reload page to get fresh OAuth state from localStorage
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   // Load videos when logged in
   useEffect(() => {
     if (authState.isLoggedIn) {
