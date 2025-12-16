@@ -40,9 +40,12 @@ const VideoCommentsPage: React.FC = () => {
   
   // Data state
   const [videos, setVideos] = useState<VideoInfo[]>([]);
-  const [selectedVideo, setSelectedVideo] = useState<VideoInfo | null>(null);
+  const [selectedVideos, setSelectedVideos] = useState<Set<string>>(new Set()); // Multi-select
   const [comments, setComments] = useState<VideoComment[]>([]);
   const [stats, setStats] = useState<CommentStats>(videoCommentService.getStats());
+  
+  // Max videos that can be selected
+  const MAX_SELECTED_VIDEOS = 10;
   
   // UI state
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
@@ -85,7 +88,7 @@ const VideoCommentsPage: React.FC = () => {
     }
   }, [authState.isLoggedIn]);
 
-  // Auto-refresh logic
+  // Auto-refresh logic for multi-video
   useEffect(() => {
     // Clear existing intervals
     if (autoRefreshRef.current) {
@@ -97,7 +100,7 @@ const VideoCommentsPage: React.FC = () => {
       countdownRef.current = null;
     }
 
-    if (autoRefresh && selectedVideo && !isLoadingComments) {
+    if (autoRefresh && selectedVideos.size > 0 && !isLoadingComments) {
       // Set initial countdown
       setCountdown(refreshInterval);
       
@@ -113,8 +116,8 @@ const VideoCommentsPage: React.FC = () => {
 
       // Auto-refresh timer
       autoRefreshRef.current = window.setInterval(() => {
-        if (selectedVideo) {
-          loadComments(selectedVideo, false);
+        if (selectedVideos.size > 0) {
+          loadCommentsForSelectedVideos();
         }
       }, refreshInterval * 1000);
     } else {
@@ -129,7 +132,7 @@ const VideoCommentsPage: React.FC = () => {
         clearInterval(countdownRef.current);
       }
     };
-  }, [autoRefresh, refreshInterval, selectedVideo]);
+  }, [autoRefresh, refreshInterval, selectedVideos.size]);
 
   const loadVideos = async () => {
     setIsLoadingVideos(true);
@@ -143,21 +146,37 @@ const VideoCommentsPage: React.FC = () => {
     }
   };
 
-  const loadComments = async (video: VideoInfo, append: boolean = false) => {
+  // Load comments for multiple selected videos
+  const loadCommentsForSelectedVideos = async () => {
+    if (selectedVideos.size === 0) return;
+    
     setIsLoadingComments(true);
+    videoCommentService.resetStats();
+    
     try {
-      const result = await videoCommentService.getVideoComments(
-        video.id,
-        append ? nextPageToken : undefined
-      );
+      const allComments: VideoComment[] = [];
+      const selectedVideosList = videos.filter(v => selectedVideos.has(v.id));
       
-      if (append) {
-        setComments(prev => [...prev, ...result.comments]);
-      } else {
-        setComments(result.comments);
+      for (const video of selectedVideosList) {
+        try {
+          const result = await videoCommentService.getVideoComments(video.id);
+          // Add video title to each comment for reference
+          const commentsWithVideo = result.comments.map(c => ({
+            ...c,
+            videoTitle: video.title,
+          }));
+          allComments.push(...commentsWithVideo);
+        } catch (e: any) {
+          console.error(`Failed to load comments for ${video.title}:`, e);
+        }
       }
       
-      setNextPageToken(result.nextPageToken);
+      // Sort by date (newest first)
+      allComments.sort((a, b) => 
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
+      );
+      
+      setComments(allComments);
       setStats(videoCommentService.getStats());
     } catch (e: any) {
       toast.error(e.message || 'Failed to load comments');
@@ -166,12 +185,41 @@ const VideoCommentsPage: React.FC = () => {
     }
   };
 
-  const handleSelectVideo = (video: VideoInfo) => {
-    setSelectedVideo(video);
+  // Toggle video selection
+  const toggleVideoSelection = (videoId: string) => {
+    setSelectedVideos(prev => {
+      const next = new Set(prev);
+      if (next.has(videoId)) {
+        next.delete(videoId);
+      } else {
+        if (next.size >= MAX_SELECTED_VIDEOS) {
+          toast.warning(`Maximum ${MAX_SELECTED_VIDEOS} videos can be selected`);
+          return prev;
+        }
+        next.add(videoId);
+      }
+      return next;
+    });
+  };
+
+  // Start scanning selected videos
+  const handleScanSelected = () => {
+    if (selectedVideos.size === 0) {
+      toast.warning('Please select at least 1 video');
+      return;
+    }
     setComments([]);
     setNextPageToken(undefined);
     videoCommentService.resetStats();
-    loadComments(video);
+    loadCommentsForSelectedVideos();
+  };
+
+  // Clear selection
+  const clearVideoSelection = () => {
+    setSelectedVideos(new Set());
+    setComments([]);
+    videoCommentService.resetStats();
+    setStats(videoCommentService.getStats());
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -215,7 +263,7 @@ const VideoCommentsPage: React.FC = () => {
   const handleLogout = () => {
     youtubeOAuth.logout();
     setVideos([]);
-    setSelectedVideo(null);
+    setSelectedVideos(new Set());
     setComments([]);
   };
 
@@ -330,15 +378,44 @@ const VideoCommentsPage: React.FC = () => {
       <div className="flex-1 flex gap-6 min-h-0">
         {/* Video List */}
         <div className="w-80 flex-shrink-0 bg-[#1a1a2e] rounded-xl overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-            <h2 className="font-semibold text-white">My Videos</h2>
-            <button
-              onClick={loadVideos}
-              disabled={isLoadingVideos}
-              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              <RefreshIcon />
-            </button>
+          <div className="p-4 border-b border-gray-700">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-semibold text-white">My Videos</h2>
+              <button
+                onClick={loadVideos}
+                disabled={isLoadingVideos}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <RefreshIcon />
+              </button>
+            </div>
+            {/* Selection info and actions */}
+            <div className="flex items-center justify-between">
+              <span className={`text-xs ${selectedVideos.size >= MAX_SELECTED_VIDEOS ? 'text-yellow-400' : 'text-gray-400'}`}>
+                {selectedVideos.size}/{MAX_SELECTED_VIDEOS} selected
+              </span>
+              <div className="flex gap-2">
+                {selectedVideos.size > 0 && (
+                  <button
+                    onClick={clearVideoSelection}
+                    className="text-xs text-gray-400 hover:text-white"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  onClick={handleScanSelected}
+                  disabled={selectedVideos.size === 0 || isLoadingComments}
+                  className={`px-3 py-1 text-xs rounded-lg transition-colors ${
+                    selectedVideos.size > 0 
+                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                      : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {isLoadingComments ? 'Scanning...' : 'Scan Selected'}
+                </button>
+              </div>
+            </div>
           </div>
           
           <div className="flex-1 overflow-y-auto">
@@ -350,21 +427,31 @@ const VideoCommentsPage: React.FC = () => {
               videos.map(video => (
                 <div
                   key={video.id}
-                  onClick={() => handleSelectVideo(video)}
-                  className={`p-3 border-b border-gray-700/50 cursor-pointer hover:bg-gray-700/50 transition-colors ${
-                    selectedVideo?.id === video.id ? 'bg-gray-700/70' : ''
+                  className={`p-3 border-b border-gray-700/50 hover:bg-gray-700/50 transition-colors ${
+                    selectedVideos.has(video.id) ? 'bg-emerald-900/20 border-l-2 border-l-emerald-500' : ''
                   }`}
                 >
-                  <div className="flex gap-3">
-                    <img 
-                      src={video.thumbnailUrl} 
-                      alt="" 
-                      className="w-24 h-14 object-cover rounded"
+                  <div className="flex gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedVideos.has(video.id)}
+                      onChange={() => toggleVideoSelection(video.id)}
+                      className="mt-3 w-4 h-4 rounded accent-emerald-500"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-white text-sm font-medium line-clamp-2">{video.title}</div>
-                      <div className="text-gray-400 text-xs mt-1">
-                        💬 {video.commentCount.toLocaleString()} comments
+                    <div 
+                      className="flex gap-3 flex-1 cursor-pointer"
+                      onClick={() => toggleVideoSelection(video.id)}
+                    >
+                      <img 
+                        src={video.thumbnailUrl} 
+                        alt="" 
+                        className="w-20 h-12 object-cover rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-white text-sm font-medium line-clamp-2">{video.title}</div>
+                        <div className="text-gray-400 text-xs mt-1">
+                          💬 {video.commentCount.toLocaleString()}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -376,23 +463,30 @@ const VideoCommentsPage: React.FC = () => {
 
         {/* Comments Panel */}
         <div className="flex-1 bg-[#1a1a2e] rounded-xl overflow-hidden flex flex-col">
-          {selectedVideo ? (
+          {selectedVideos.size > 0 ? (
             <>
-              {/* Video Info Header */}
+              {/* Selected Videos Info Header */}
               <div className="p-4 border-b border-gray-700">
-                <div className="flex gap-4">
-                  <img 
-                    src={selectedVideo.thumbnailUrl} 
-                    alt="" 
-                    className="w-40 h-24 object-cover rounded-lg"
-                  />
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold line-clamp-2">{selectedVideo.title}</h3>
-                    <div className="flex gap-4 mt-2 text-sm text-gray-400">
-                      <span>👁️ {selectedVideo.viewCount.toLocaleString()} views</span>
-                      <span>👍 {selectedVideo.likeCount.toLocaleString()}</span>
-                      <span>💬 {selectedVideo.commentCount.toLocaleString()}</span>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-white font-semibold">
+                      Monitoring {selectedVideos.size} video{selectedVideos.size > 1 ? 's' : ''}
+                    </h3>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {videos.filter(v => selectedVideos.has(v.id)).slice(0, 5).map(v => (
+                        <span key={v.id} className="px-2 py-1 bg-gray-700 text-gray-300 text-xs rounded">
+                          {v.title.length > 25 ? v.title.substring(0, 25) + '...' : v.title}
+                        </span>
+                      ))}
+                      {selectedVideos.size > 5 && (
+                        <span className="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded">
+                          +{selectedVideos.size - 5} more
+                        </span>
+                      )}
                     </div>
+                  </div>
+                  <div className="text-right text-sm text-gray-400">
+                    <div>Total Comments: {videos.filter(v => selectedVideos.has(v.id)).reduce((sum, v) => sum + v.commentCount, 0).toLocaleString()}</div>
                   </div>
                 </div>
               </div>
@@ -462,7 +556,7 @@ const VideoCommentsPage: React.FC = () => {
                     </button>
                   )}
                   <button
-                    onClick={() => loadComments(selectedVideo)}
+                    onClick={loadCommentsForSelectedVideos}
                     disabled={isLoadingComments}
                     className={`p-2 hover:bg-gray-700 rounded-lg transition-colors ${isLoadingComments ? 'animate-spin' : ''}`}
                   >
@@ -474,10 +568,12 @@ const VideoCommentsPage: React.FC = () => {
               {/* Comments List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoadingComments && comments.length === 0 ? (
-                  <div className="text-center text-gray-400 py-8">Loading comments...</div>
+                  <div className="text-center text-gray-400 py-8">
+                    <div className="animate-pulse">Scanning {selectedVideos.size} video{selectedVideos.size > 1 ? 's' : ''}...</div>
+                  </div>
                 ) : filteredComments.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">
-                    {filter === 'spam' ? 'No spam detected 🎉' : 'No comments found'}
+                    {filter === 'spam' ? 'No spam detected 🎉' : 'No comments found. Click "Scan Selected" to load comments.'}
                   </div>
                 ) : (
                   <>
@@ -488,18 +584,9 @@ const VideoCommentsPage: React.FC = () => {
                         isSelected={selectedComments.has(comment.id)}
                         onToggleSelect={() => toggleSelectComment(comment.id)}
                         onDelete={() => handleDeleteComment(comment.id)}
+                        showVideoTitle={selectedVideos.size > 1}
                       />
                     ))}
-                    
-                    {nextPageToken && (
-                      <button
-                        onClick={() => loadComments(selectedVideo, true)}
-                        disabled={isLoadingComments}
-                        className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-                      >
-                        {isLoadingComments ? 'Loading...' : 'Load More Comments'}
-                      </button>
-                    )}
                   </>
                 )}
               </div>
@@ -508,7 +595,8 @@ const VideoCommentsPage: React.FC = () => {
             <div className="flex-1 flex items-center justify-center text-gray-400">
               <div className="text-center">
                 <div className="text-4xl mb-4">👈</div>
-                <p>Select a video to view comments</p>
+                <p>Select 1-{MAX_SELECTED_VIDEOS} videos to monitor comments</p>
+                <p className="text-sm mt-2">Use checkboxes to select multiple videos</p>
               </div>
             </div>
           )}
@@ -518,19 +606,28 @@ const VideoCommentsPage: React.FC = () => {
   );
 };
 
-// Comment Card Component
+// Comment Card Component with video title support
 const CommentCard: React.FC<{
-  comment: VideoComment;
+  comment: VideoComment & { videoTitle?: string };
   isSelected: boolean;
   onToggleSelect: () => void;
   onDelete: () => void;
-}> = ({ comment, isSelected, onToggleSelect, onDelete }) => {
+  showVideoTitle?: boolean;
+}> = ({ comment, isSelected, onToggleSelect, onDelete, showVideoTitle = false }) => {
   return (
     <div className={`p-4 rounded-lg border transition-colors ${
       comment.isSpam 
         ? 'bg-red-900/20 border-red-500/30' 
         : 'bg-gray-800/50 border-gray-700/50'
     } ${isSelected ? 'ring-2 ring-emerald-500' : ''}`}>
+      {/* Video title badge for multi-video mode */}
+      {showVideoTitle && comment.videoTitle && (
+        <div className="mb-2 pb-2 border-b border-gray-700/50">
+          <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded">
+            📹 {comment.videoTitle.length > 40 ? comment.videoTitle.substring(0, 40) + '...' : comment.videoTitle}
+          </span>
+        </div>
+      )}
       <div className="flex gap-3">
         <input
           type="checkbox"
