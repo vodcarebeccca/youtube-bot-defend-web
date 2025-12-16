@@ -2,7 +2,7 @@
  * Video Comments Page - Monitor and moderate comments on your YouTube videos
  * Requires user OAuth login (not bot tokens)
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { youtubeOAuth, OAuthState } from '../services/youtubeOAuth';
 import { videoCommentService, VideoInfo, VideoComment, CommentStats } from '../services/videoCommentService';
 import { useToast } from '../contexts/ToastContext';
@@ -50,6 +50,13 @@ const VideoCommentsPage: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'spam' | 'clean'>('all');
   const [selectedComments, setSelectedComments] = useState<Set<string>>(new Set());
   const [nextPageToken, setNextPageToken] = useState<string | undefined>();
+  
+  // Auto-refresh state
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(30); // seconds
+  const [countdown, setCountdown] = useState(0);
+  const autoRefreshRef = useRef<number | null>(null);
+  const countdownRef = useRef<number | null>(null);
 
   // Subscribe to OAuth state changes
   useEffect(() => {
@@ -77,6 +84,52 @@ const VideoCommentsPage: React.FC = () => {
       loadVideos();
     }
   }, [authState.isLoggedIn]);
+
+  // Auto-refresh logic
+  useEffect(() => {
+    // Clear existing intervals
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+      autoRefreshRef.current = null;
+    }
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+
+    if (autoRefresh && selectedVideo && !isLoadingComments) {
+      // Set initial countdown
+      setCountdown(refreshInterval);
+      
+      // Countdown timer (every second)
+      countdownRef.current = window.setInterval(() => {
+        setCountdown(prev => {
+          if (prev <= 1) {
+            return refreshInterval;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      // Auto-refresh timer
+      autoRefreshRef.current = window.setInterval(() => {
+        if (selectedVideo) {
+          loadComments(selectedVideo, false);
+        }
+      }, refreshInterval * 1000);
+    } else {
+      setCountdown(0);
+    }
+
+    return () => {
+      if (autoRefreshRef.current) {
+        clearInterval(autoRefreshRef.current);
+      }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+      }
+    };
+  }, [autoRefresh, refreshInterval, selectedVideo]);
 
   const loadVideos = async () => {
     setIsLoadingVideos(true);
@@ -345,7 +398,7 @@ const VideoCommentsPage: React.FC = () => {
               </div>
 
               {/* Filter & Actions Bar */}
-              <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+              <div className="p-4 border-b border-gray-700 flex items-center justify-between flex-wrap gap-3">
                 <div className="flex gap-2">
                   {(['all', 'spam', 'clean'] as const).map(f => (
                     <button
@@ -362,7 +415,37 @@ const VideoCommentsPage: React.FC = () => {
                   ))}
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  {/* Auto-refresh toggle */}
+                  <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                    <button
+                      onClick={() => setAutoRefresh(!autoRefresh)}
+                      className={`relative w-10 h-5 rounded-full transition-colors ${
+                        autoRefresh ? 'bg-emerald-600' : 'bg-gray-600'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                        autoRefresh ? 'translate-x-5' : 'translate-x-0.5'
+                      }`} />
+                    </button>
+                    <span className="text-gray-300 text-sm">Auto</span>
+                    {autoRefresh && (
+                      <select
+                        value={refreshInterval}
+                        onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                        className="bg-gray-700 text-white text-xs rounded px-1 py-0.5"
+                      >
+                        <option value={15}>15s</option>
+                        <option value={30}>30s</option>
+                        <option value={60}>1m</option>
+                        <option value={120}>2m</option>
+                      </select>
+                    )}
+                    {autoRefresh && countdown > 0 && (
+                      <span className="text-emerald-400 text-xs font-mono">{countdown}s</span>
+                    )}
+                  </div>
+
                   <button
                     onClick={selectAllSpam}
                     className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm transition-colors"
@@ -381,7 +464,7 @@ const VideoCommentsPage: React.FC = () => {
                   <button
                     onClick={() => loadComments(selectedVideo)}
                     disabled={isLoadingComments}
-                    className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                    className={`p-2 hover:bg-gray-700 rounded-lg transition-colors ${isLoadingComments ? 'animate-spin' : ''}`}
                   >
                     <RefreshIcon />
                   </button>
