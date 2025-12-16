@@ -17,6 +17,8 @@ import BotsPage from './pages/BotsPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import ThemesPage from './pages/ThemesPage';
+import VideoCommentsPage from './pages/VideoCommentsPage';
+import OAuthCallbackPage from './pages/OAuthCallbackPage';
 
 // Services
 import { 
@@ -490,7 +492,10 @@ const AppContent: React.FC = () => {
           <SettingsPage settings={settings} setSettings={setSettings} onExportLog={exportLog} />
         } />
         <Route path="/themes" element={<ThemesPage />} />
+        <Route path="/video-comments" element={<VideoCommentsPage />} />
       </Route>
+      {/* OAuth callback route (outside Layout) */}
+      <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
     </Routes>
   );
 };

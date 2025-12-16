@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Coffee,
+  MessageSquare,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -37,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const mainNavItems: NavItem[] = [
     { path: '/', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { path: '/monitoring', icon: <Shield size={20} />, label: 'Live Monitoring' },
+    { path: '/video-comments', icon: <MessageSquare size={20} />, label: 'Video Comments', badge: 'NEW' },
     { path: '/logs', icon: <ScrollText size={20} />, label: 'Moderation Log' },
     { path: '/detection', icon: <ListFilter size={20} />, label: 'Spam Detection' },
   ];
