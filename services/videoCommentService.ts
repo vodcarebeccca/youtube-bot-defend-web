@@ -319,6 +319,9 @@ class VideoCommentService {
 
   /**
    * Delete a comment (only works on user's own channel videos)
+   * Note: YouTube API comments.delete only works for:
+   * - Comments you made on any video
+   * - Comments on YOUR videos (as channel owner)
    */
   async deleteComment(commentId: string): Promise<boolean> {
     const accessToken = await youtubeOAuth.getAccessToken();
@@ -327,6 +330,8 @@ class VideoCommentService {
     }
 
     try {
+      console.log(`[VideoCommentService] Attempting to delete comment: ${commentId}`);
+      
       const response = await fetch(
         `https://www.googleapis.com/youtube/v3/comments?id=${commentId}`,
         {
@@ -335,21 +340,47 @@ class VideoCommentService {
         }
       );
 
+      console.log(`[VideoCommentService] Delete response status: ${response.status}`);
+
       if (response.status === 204) {
         this.stats.commentsDeleted++;
-        console.log(`[VideoCommentService] ✅ Comment deleted: ${commentId}`);
+        console.log(`[VideoCommentService] ✅ Comment deleted successfully: ${commentId}`);
         return true;
       }
 
-      if (response.status === 403) {
-        const error = await response.json();
-        if (error.error?.errors?.[0]?.reason === 'forbidden') {
-          throw new Error('You can only delete comments on your own videos');
+      // Handle error responses
+      let errorMessage = `Delete failed with status ${response.status}`;
+      
+      try {
+        const errorData = await response.json();
+        console.error('[VideoCommentService] Delete error response:', errorData);
+        
+        const reason = errorData.error?.errors?.[0]?.reason;
+        const message = errorData.error?.message;
+        
+        if (response.status === 403) {
+          if (reason === 'forbidden' || reason === 'commentDeleteForbidden') {
+            throw new Error('Tidak bisa delete: Kamu hanya bisa delete comment di video milikmu sendiri');
+          }
+          if (reason === 'insufficientPermissions') {
+            throw new Error('Permission tidak cukup. Coba logout dan login ulang.');
+          }
+          throw new Error(message || 'Permission denied');
         }
-        throw new Error(error.error?.message || 'Permission denied');
+        
+        if (response.status === 404) {
+          throw new Error('Comment tidak ditemukan atau sudah dihapus');
+        }
+        
+        errorMessage = message || errorMessage;
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message.includes('Tidak bisa')) {
+          throw parseError;
+        }
+        // JSON parse failed, use default error message
       }
 
-      return false;
+      throw new Error(errorMessage);
     } catch (e: any) {
       console.error('[VideoCommentService] deleteComment error:', e);
       throw e;
