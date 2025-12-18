@@ -26,9 +26,10 @@ interface BotToken {
   last_checked?: string;
 }
 
-// Google OAuth credentials (MUST match Python tools google_oauth_config.json)
-const GOOGLE_CLIENT_ID = '573738457758-tjgqgd4dhd0oqtor24b6ciu1vfvv2rdl.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = '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';
+// Google OAuth credentials - from environment variables (MUST match Python tools)
+// Set VITE_GOOGLE_CLIENT_ID and VITE_GOOGLE_CLIENT_SECRET in Vercel Environment Variables
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '';
 
 // Test token validity by trying to refresh
 async function testTokenValidity(refreshToken: string): Promise<{ valid: boolean; error?: string }> {
@@ -361,6 +362,81 @@ const BotsTab: React.FC = () => {
 };
 
 
+// OAuth scopes for bot (live chat moderation)
+const OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/youtube',
+  'https://www.googleapis.com/auth/youtube.force-ssl',
+].join(' ');
+
+// Get OAuth redirect URI
+const getRedirectUri = () => {
+  return `${window.location.origin}/oauth/callback`;
+};
+
+// Exchange authorization code for tokens
+async function exchangeCodeForTokens(code: string): Promise<{
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+} | null> {
+  try {
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        code: code,
+        grant_type: 'authorization_code',
+        redirect_uri: getRedirectUri(),
+      }),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    } else {
+      const error = await response.json();
+      console.error('Token exchange error:', error);
+      return null;
+    }
+  } catch (e) {
+    console.error('Token exchange exception:', e);
+    return null;
+  }
+}
+
+// Get channel info from YouTube API
+async function getChannelInfo(accessToken: string): Promise<{
+  id: string;
+  title: string;
+  customUrl?: string;
+  thumbnailUrl?: string;
+} | null> {
+  try {
+    const response = await fetch(
+      'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.items && data.items.length > 0) {
+        const channel = data.items[0];
+        return {
+          id: channel.id,
+          title: channel.snippet.title,
+          customUrl: channel.snippet.customUrl,
+          thumbnailUrl: channel.snippet.thumbnails?.default?.url,
+        };
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error('Get channel info error:', e);
+    return null;
+  }
+}
+
 // Add Bot Modal Component
 interface AddBotModalProps {
   onClose: () => void;
@@ -368,7 +444,7 @@ interface AddBotModalProps {
 }
 
 const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
-  const [mode, setMode] = useState<'json' | 'manual'>('json');
+  const [mode, setMode] = useState<'oauth' | 'json' | 'manual'>('oauth');
   const [jsonInput, setJsonInput] = useState('');
   const [name, setName] = useState('');
   const [channelId, setChannelId] = useState('');
@@ -377,6 +453,101 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
   const [refreshToken, setRefreshToken] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [oauthStatus, setOauthStatus] = useState<'idle' | 'waiting' | 'processing' | 'success' | 'error'>('idle');
+
+  // Listen for OAuth callback message
+  useEffect(() => {
+    const handleMessage = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data?.type === 'oauth_callback' && event.data?.code) {
+        setOauthStatus('processing');
+        setError(null);
+        
+        // Exchange code for tokens
+        const tokens = await exchangeCodeForTokens(event.data.code);
+        if (!tokens || !tokens.refresh_token) {
+          setError('Gagal mendapatkan token. Pastikan akun belum pernah di-authorize sebelumnya.');
+          setOauthStatus('error');
+          return;
+        }
+        
+        // Get channel info
+        const channelInfo = await getChannelInfo(tokens.access_token);
+        if (!channelInfo) {
+          setError('Gagal mendapatkan info channel.');
+          setOauthStatus('error');
+          return;
+        }
+        
+        // Save bot to Firebase
+        try {
+          const botId = `bot_${Date.now()}`;
+          const url = `${BASE_URL}/webapp_bots/${botId}?key=${FIREBASE_CONFIG.apiKey}`;
+          
+          const botData = {
+            name: channelInfo.title,
+            channel_id: channelInfo.id,
+            channel_url: channelInfo.customUrl ? `https://youtube.com/${channelInfo.customUrl}` : `https://youtube.com/channel/${channelInfo.id}`,
+            avatar_url: channelInfo.thumbnailUrl || '',
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
+            enabled: true,
+            created_at: new Date().toISOString(),
+          };
+          
+          const response = await fetch(url, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fields: dictToFirestore(botData) }),
+          });
+          
+          if (response.ok) {
+            setOauthStatus('success');
+            setTimeout(() => {
+              onSuccess();
+            }, 1500);
+          } else {
+            setError('Gagal menyimpan bot ke database.');
+            setOauthStatus('error');
+          }
+        } catch (e) {
+          setError('Error: ' + (e as Error).message);
+          setOauthStatus('error');
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onSuccess]);
+
+  // Start OAuth flow
+  const startOAuthLogin = () => {
+    setOauthStatus('waiting');
+    setError(null);
+    
+    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+    authUrl.searchParams.set('client_id', GOOGLE_CLIENT_ID);
+    authUrl.searchParams.set('redirect_uri', getRedirectUri());
+    authUrl.searchParams.set('response_type', 'code');
+    authUrl.searchParams.set('scope', OAUTH_SCOPES);
+    authUrl.searchParams.set('access_type', 'offline');
+    authUrl.searchParams.set('prompt', 'consent'); // Force consent to get refresh_token
+    authUrl.searchParams.set('state', 'admin_add_bot');
+    
+    // Open popup
+    const width = 500;
+    const height = 600;
+    const left = window.screenX + (window.outerWidth - width) / 2;
+    const top = window.screenY + (window.outerHeight - height) / 2;
+    
+    window.open(
+      authUrl.toString(),
+      'oauth_popup',
+      `width=${width},height=${height},left=${left},top=${top},popup=1`
+    );
+  };
 
   const parseJsonToken = (json: string): Partial<BotToken> | null => {
     try {
@@ -493,6 +664,14 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
           {/* Mode Toggle */}
           <div className="flex gap-2">
             <button
+              onClick={() => setMode('oauth')}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                mode === 'oauth' ? 'bg-red-600 text-white' : 'bg-gray-700 text-gray-300'
+              }`}
+            >
+              🔐 Login Google
+            </button>
+            <button
               onClick={() => setMode('json')}
               className={`flex-1 py-2 rounded-lg text-sm font-medium ${
                 mode === 'json' ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-300'
@@ -506,11 +685,74 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
                 mode === 'manual' ? 'bg-emerald-600 text-white' : 'bg-gray-700 text-gray-300'
               }`}
             >
-              Input Manual
+              Manual
             </button>
           </div>
 
-          {mode === 'json' ? (
+          {/* OAuth Login Mode */}
+          {mode === 'oauth' && (
+            <div className="text-center py-4">
+              {oauthStatus === 'idle' && (
+                <>
+                  <p className="text-gray-400 mb-4">
+                    Login dengan akun YouTube yang akan dijadikan bot moderator.
+                  </p>
+                  <button
+                    onClick={startOAuthLogin}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium"
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 24 24">
+                      <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                    Login with Google
+                  </button>
+                  <p className="text-xs text-gray-500 mt-3">
+                    Pastikan akun YouTube sudah memiliki channel
+                  </p>
+                </>
+              )}
+              
+              {oauthStatus === 'waiting' && (
+                <div className="py-4">
+                  <Loader2 size={32} className="mx-auto text-blue-400 animate-spin mb-3" />
+                  <p className="text-gray-300">Menunggu login di popup...</p>
+                  <p className="text-xs text-gray-500 mt-2">Selesaikan login di jendela popup</p>
+                </div>
+              )}
+              
+              {oauthStatus === 'processing' && (
+                <div className="py-4">
+                  <Loader2 size={32} className="mx-auto text-emerald-400 animate-spin mb-3" />
+                  <p className="text-gray-300">Memproses token...</p>
+                </div>
+              )}
+              
+              {oauthStatus === 'success' && (
+                <div className="py-4">
+                  <CheckCircle size={48} className="mx-auto text-emerald-400 mb-3" />
+                  <p className="text-emerald-300 font-medium">Bot berhasil ditambahkan!</p>
+                </div>
+              )}
+              
+              {oauthStatus === 'error' && (
+                <div className="py-4">
+                  <XCircle size={48} className="mx-auto text-red-400 mb-3" />
+                  <p className="text-red-300 mb-2">Gagal menambahkan bot</p>
+                  <button
+                    onClick={() => setOauthStatus('idle')}
+                    className="text-sm text-blue-400 hover:underline"
+                  >
+                    Coba lagi
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {mode === 'json' && (
             <div>
               <label className="block text-sm text-gray-400 mb-2">
                 Paste Token JSON (dari file *_token.json)
@@ -525,7 +767,9 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
                 Bisa paste langsung dari file token yang di-generate Python tools
               </p>
             </div>
-          ) : (
+          )}
+
+          {mode === 'manual' && (
             <div className="space-y-3">
               <div>
                 <label className="block text-sm text-gray-400 mb-1">Nama Bot</label>
@@ -588,21 +832,26 @@ const AddBotModal: React.FC<AddBotModalProps> = ({ onClose, onSuccess }) => {
             </div>
           )}
 
-          <div className="flex gap-2 pt-2">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading}
-              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium disabled:opacity-50"
-            >
-              {loading ? 'Menyimpan...' : 'Simpan Bot'}
-            </button>
-          </div>
+          {/* Buttons - hide for OAuth mode when processing */}
+          {(mode !== 'oauth' || oauthStatus === 'idle' || oauthStatus === 'error') && (
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm"
+              >
+                {mode === 'oauth' ? 'Tutup' : 'Batal'}
+              </button>
+              {mode !== 'oauth' && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                >
+                  {loading ? 'Menyimpan...' : 'Simpan Bot'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

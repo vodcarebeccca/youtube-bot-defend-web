@@ -24,7 +24,25 @@ const OAuthCallbackPage: React.FC = () => {
         return;
       }
 
-      if (!code || !state) {
+      if (!code) {
+        setStatus('error');
+        setErrorMessage('Invalid callback parameters');
+        return;
+      }
+
+      // Check if this is from admin panel (add bot flow)
+      if (state === 'admin_add_bot') {
+        setStatus('success');
+        // Send code back to admin panel to exchange for tokens
+        if (window.opener) {
+          window.opener.postMessage({ type: 'oauth_callback', code }, window.location.origin);
+          setTimeout(() => window.close(), 1500);
+        }
+        return;
+      }
+
+      // Normal user login flow (Video Comments)
+      if (!state) {
         setStatus('error');
         setErrorMessage('Invalid callback parameters');
         return;
