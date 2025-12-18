@@ -297,19 +297,19 @@ const VideoCommentsPage: React.FC = () => {
       <div className="p-6">
         <div className="max-w-2xl mx-auto text-center py-16">
           <div className="text-6xl mb-6">💬</div>
-          <h1 className="text-2xl font-bold text-white mb-4">Video Comment Moderation</h1>
+          <h1 className="text-2xl font-bold text-white mb-4">Moderasi Komentar Video</h1>
           <p className="text-gray-400 mb-8">
-            Monitor and moderate comments on your YouTube videos. 
-            Login with your YouTube account to get started.
+            Pantau dan moderasi komentar di video YouTube kamu. 
+            Login dengan akun YouTube untuk memulai.
           </p>
           
           <div className="bg-[#1a1a2e] rounded-xl p-6 mb-8 text-left">
-            <h3 className="text-white font-semibold mb-4">🔐 Why Login Required?</h3>
+            <h3 className="text-white font-semibold mb-4">🔐 Kenapa Harus Login?</h3>
             <ul className="text-gray-400 space-y-2 text-sm">
-              <li>• You can only delete comments on <strong className="text-white">your own videos</strong></li>
-              <li>• Bot tokens cannot delete video comments (YouTube API restriction)</li>
-              <li>• Your login is secure and only used for comment moderation</li>
-              <li>• We don't store your password, only OAuth tokens</li>
+              <li>• Kamu hanya bisa hapus komentar di <strong className="text-white">video milikmu sendiri</strong></li>
+              <li>• Bot token tidak bisa hapus komentar video (batasan YouTube API)</li>
+              <li>• Login kamu aman dan hanya digunakan untuk moderasi komentar</li>
+              <li>• Kami tidak menyimpan password, hanya OAuth token</li>
             </ul>
           </div>
 
@@ -318,7 +318,7 @@ const VideoCommentsPage: React.FC = () => {
             className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition-colors"
           >
             <LoginIcon />
-            Login with YouTube
+            Login dengan YouTube
           </button>
         </div>
       </div>
@@ -330,9 +330,9 @@ const VideoCommentsPage: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-white">Video Comment Moderation</h1>
+          <h1 className="text-xl font-bold text-white">Moderasi Komentar Video</h1>
           <p className="text-gray-400 text-sm">
-            Logged in as: <span className="text-emerald-400">{authState.channel?.title || authState.user?.name}</span>
+            Login sebagai: <span className="text-emerald-400">{authState.channel?.title || authState.user?.name}</span>
           </p>
         </div>
         
@@ -358,19 +358,19 @@ const VideoCommentsPage: React.FC = () => {
       <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-[#1a1a2e] rounded-lg p-4">
           <div className="text-2xl font-bold text-white">{stats.totalComments}</div>
-          <div className="text-gray-400 text-sm">Total Scanned</div>
+          <div className="text-gray-400 text-sm">Total Dipindai</div>
         </div>
         <div className="bg-[#1a1a2e] rounded-lg p-4">
           <div className="text-2xl font-bold text-red-400">{stats.spamDetected}</div>
-          <div className="text-gray-400 text-sm">Spam Detected</div>
+          <div className="text-gray-400 text-sm">Spam Terdeteksi</div>
         </div>
         <div className="bg-[#1a1a2e] rounded-lg p-4">
           <div className="text-2xl font-bold text-emerald-400">{stats.commentsDeleted}</div>
-          <div className="text-gray-400 text-sm">Deleted</div>
+          <div className="text-gray-400 text-sm">Dihapus</div>
         </div>
         <div className="bg-[#1a1a2e] rounded-lg p-4">
           <div className="text-2xl font-bold text-yellow-400">{videos.length}</div>
-          <div className="text-gray-400 text-sm">Videos</div>
+          <div className="text-gray-400 text-sm">Video</div>
         </div>
       </div>
 
@@ -380,7 +380,7 @@ const VideoCommentsPage: React.FC = () => {
         <div className="w-80 flex-shrink-0 bg-[#1a1a2e] rounded-xl overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-700">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="font-semibold text-white">My Videos</h2>
+              <h2 className="font-semibold text-white">Video Saya</h2>
               <button
                 onClick={loadVideos}
                 disabled={isLoadingVideos}
@@ -392,7 +392,7 @@ const VideoCommentsPage: React.FC = () => {
             {/* Selection info and actions */}
             <div className="flex items-center justify-between">
               <span className={`text-xs ${selectedVideos.size >= MAX_SELECTED_VIDEOS ? 'text-yellow-400' : 'text-gray-400'}`}>
-                {selectedVideos.size}/{MAX_SELECTED_VIDEOS} selected
+                {selectedVideos.size}/{MAX_SELECTED_VIDEOS} dipilih
               </span>
               <div className="flex gap-2">
                 {selectedVideos.size > 0 && (
@@ -400,7 +400,7 @@ const VideoCommentsPage: React.FC = () => {
                     onClick={clearVideoSelection}
                     className="text-xs text-gray-400 hover:text-white"
                   >
-                    Clear
+                    Hapus
                   </button>
                 )}
                 <button
@@ -412,7 +412,7 @@ const VideoCommentsPage: React.FC = () => {
                       : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                   }`}
                 >
-                  {isLoadingComments ? 'Scanning...' : 'Scan Selected'}
+                  {isLoadingComments ? 'Memindai...' : 'Pindai Terpilih'}
                 </button>
               </div>
             </div>
@@ -420,9 +420,9 @@ const VideoCommentsPage: React.FC = () => {
           
           <div className="flex-1 overflow-y-auto">
             {isLoadingVideos ? (
-              <div className="p-4 text-center text-gray-400">Loading videos...</div>
+              <div className="p-4 text-center text-gray-400">Memuat video...</div>
             ) : videos.length === 0 ? (
-              <div className="p-4 text-center text-gray-400">No videos found</div>
+              <div className="p-4 text-center text-gray-400">Tidak ada video ditemukan</div>
             ) : (
               videos.map(video => (
                 <div
@@ -470,7 +470,7 @@ const VideoCommentsPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-white font-semibold">
-                      Monitoring {selectedVideos.size} video{selectedVideos.size > 1 ? 's' : ''}
+                      Memantau {selectedVideos.size} video
                     </h3>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {videos.filter(v => selectedVideos.has(v.id)).slice(0, 5).map(v => (
@@ -486,7 +486,7 @@ const VideoCommentsPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right text-sm text-gray-400">
-                    <div>Total Comments: {videos.filter(v => selectedVideos.has(v.id)).reduce((sum, v) => sum + v.commentCount, 0).toLocaleString()}</div>
+                    <div>Total Komentar: {videos.filter(v => selectedVideos.has(v.id)).reduce((sum, v) => sum + v.commentCount, 0).toLocaleString()}</div>
                   </div>
                 </div>
               </div>
@@ -544,7 +544,7 @@ const VideoCommentsPage: React.FC = () => {
                     onClick={selectAllSpam}
                     className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm transition-colors"
                   >
-                    Select All Spam
+                    Pilih Semua Spam
                   </button>
                   {selectedComments.size > 0 && (
                     <button
@@ -552,7 +552,7 @@ const VideoCommentsPage: React.FC = () => {
                       className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition-colors flex items-center gap-1"
                     >
                       <TrashIcon />
-                      Delete ({selectedComments.size})
+                      Hapus ({selectedComments.size})
                     </button>
                   )}
                   <button
@@ -569,11 +569,11 @@ const VideoCommentsPage: React.FC = () => {
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {isLoadingComments && comments.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">
-                    <div className="animate-pulse">Scanning {selectedVideos.size} video{selectedVideos.size > 1 ? 's' : ''}...</div>
+                    <div className="animate-pulse">Memindai {selectedVideos.size} video...</div>
                   </div>
                 ) : filteredComments.length === 0 ? (
                   <div className="text-center text-gray-400 py-8">
-                    {filter === 'spam' ? 'No spam detected 🎉' : 'No comments found. Click "Scan Selected" to load comments.'}
+                    {filter === 'spam' ? 'Tidak ada spam terdeteksi 🎉' : 'Tidak ada komentar. Klik "Pindai Terpilih" untuk memuat komentar.'}
                   </div>
                 ) : (
                   <>
@@ -595,8 +595,8 @@ const VideoCommentsPage: React.FC = () => {
             <div className="flex-1 flex items-center justify-center text-gray-400">
               <div className="text-center">
                 <div className="text-4xl mb-4">👈</div>
-                <p>Select 1-{MAX_SELECTED_VIDEOS} videos to monitor comments</p>
-                <p className="text-sm mt-2">Use checkboxes to select multiple videos</p>
+                <p>Pilih 1-{MAX_SELECTED_VIDEOS} video untuk memantau komentar</p>
+                <p className="text-sm mt-2">Gunakan checkbox untuk memilih beberapa video</p>
               </div>
             </div>
           )}
@@ -671,14 +671,14 @@ const CommentCard: React.FC<{
           
           <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
             <span>👍 {comment.likeCount}</span>
-            {comment.replyCount > 0 && <span>💬 {comment.replyCount} replies</span>}
+            {comment.replyCount > 0 && <span>💬 {comment.replyCount} balasan</span>}
           </div>
         </div>
         
         <button
           onClick={onDelete}
           className="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors flex-shrink-0"
-          title="Delete comment"
+          title="Hapus komentar"
         >
           <TrashIcon />
         </button>
